@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, Plus, Archive, CheckCircle2, Users, Star, Clock, Pencil } from 'lucide-react';
+import { BookOpen, Plus, Archive, CheckCircle2, Users, Star, Clock, Pencil, Eye } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { supabase, Course, Profile } from '../lib/supabase';
 import { Button, Card, Input, Textarea, Select, Badge, Spinner, EmptyState, Modal, LiveBadge, AiBadge, ProgressBar, formatDate } from '../components/ui';
@@ -31,6 +31,7 @@ export default function CoursesPage() {
   const [showForm, setShowForm] = useState(false);
   const [students, setStudents] = useState<Profile[]>([]);
   const [showEnroll, setShowEnroll] = useState<Course | null>(null);
+  const [showOutline, setShowOutline] = useState<Course | null>(null);
   const [enrolledIds, setEnrolledIds] = useState<string[]>([]);
   const [tab, setTab] = useState<'active' | 'draft' | 'archived'>('active');
 
@@ -196,35 +197,48 @@ export default function CoursesPage() {
                   {/* Footer actions */}
                   <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-2">
                     {role === 'student' ? (
-                      isEnrolled ? (
-                        <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
-                          <CheckCircle2 size={14} /> Enrolled
-                        </span>
-                      ) : c.status === 'published' ? (
-                        <Button size="sm" variant="gradient" onClick={async () => {
-                          await supabase.from('enrollments').insert({ course_id: c.id, student_id: profile!.id });
-                          load();
-                        }}>
-                          Enroll Now
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {isEnrolled ? (
+                          <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
+                            <CheckCircle2 size={14} /> Enrolled
+                          </span>
+                        ) : c.status === 'published' ? (
+                          <Button size="sm" variant="gradient" onClick={async () => {
+                            await supabase.from('enrollments').insert({ course_id: c.id, student_id: profile!.id });
+                            load();
+                          }}>
+                            Enroll Now
+                          </Button>
+                        ) : null}
+                        <Button size="sm" variant="ghost" onClick={() => setShowOutline(c)}>
+                          <Eye size={13} /> View Outline
                         </Button>
-                      ) : null
+                      </div>
                     ) : (
                       <div className="flex items-center gap-1.5 flex-wrap">
+                        {role === 'professor' && c.status === 'draft' && (
+                          <Button size="sm" variant="primary" onClick={async () => {
+                            await supabase.from('courses').update({ status: 'pending' }).eq('id', c.id);
+                            load();
+                          }}>Submit</Button>
+                        )}
                         {role === 'admin' && c.status === 'pending' && (
                           <Button size="sm" variant="primary" onClick={async () => {
                             await supabase.from('courses').update({ status: 'approved' }).eq('id', c.id);
                             load();
                           }}>Approve</Button>
                         )}
-                        {role === 'admin' && c.status === 'approved' && (
+                        {role === 'professor' && c.status === 'approved' && (
                           <Button size="sm" variant="gradient" onClick={async () => {
                             await supabase.from('courses').update({ status: 'published' }).eq('id', c.id);
                             load();
                           }}>Publish</Button>
                         )}
-                        <Button size="sm" variant="ghost" onClick={() => setShowEnroll(c)}>
-                          <Users size={13} /> Assign
-                        </Button>
+                        {role === 'professor' && (
+                          <Button size="sm" variant="ghost" onClick={() => setShowEnroll(c)}>
+                            <Users size={13} /> Assign
+                          </Button>
+                        )}
                         {c.status !== 'archived' && (
                           <Button size="sm" variant="ghost" onClick={async () => {
                             await supabase.from('courses').update({ status: 'archived' }).eq('id', c.id);
@@ -262,6 +276,29 @@ export default function CoursesPage() {
           onDone={() => { setShowEnroll(null); load(); }}
         />
       )}
+
+      {showOutline && (
+        <Modal open onClose={() => setShowOutline(null)} title="Course Outline" size="md">
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-bold text-slate-800">{showOutline.title}</h3>
+              <div className="flex gap-2 mt-1">
+                <Badge color="slate">{showOutline.category}</Badge>
+                {showOutline.professor && (
+                  <Badge color="blue">By {showOutline.professor.full_name || showOutline.professor.email}</Badge>
+                )}
+              </div>
+            </div>
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+              <h4 className="font-semibold text-slate-700 mb-2">Description</h4>
+              <p className="text-sm text-slate-600 whitespace-pre-wrap">{showOutline.description || 'No detailed description available.'}</p>
+            </div>
+            <div className="flex justify-end pt-2">
+              <Button onClick={() => setShowOutline(null)}>Close</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -297,7 +334,10 @@ function CourseForm({ course, onClose, onSaved }: { course: Course | null; onClo
           { value: 'approved', label: 'Approved' },
           { value: 'published', label: 'Published' },
           { value: 'archived', label: 'Archived' },
-        ]} />
+        ].filter(o => 
+          profile?.role === 'admin' ? true : 
+          ['draft', 'pending', 'published', 'archived'].includes(o.value)
+        )} />
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button variant="gradient" onClick={save} disabled={saving || !title}>{saving ? 'Saving…' : 'Save Course'}</Button>
