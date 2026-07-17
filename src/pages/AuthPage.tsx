@@ -116,6 +116,33 @@ export default function AuthPage() {
             By continuing you agree to the institution's acceptable use policy.
           </p>
         </div>
+
+        {/* Demo credentials */}
+        {mode === 'login' && (
+          <div className="mt-4 bg-white rounded-2xl border border-slate-200 shadow p-4">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3 text-center">
+              Demo Quick Login
+            </p>
+            <div className="flex flex-col gap-2">
+              {[
+                { label: '🛡️ Admin',     email: 'admin@demo.com',     color: 'bg-violet-50 hover:bg-violet-100 text-violet-700 border-violet-200' },
+                { label: '🎓 Professor', email: 'professor@demo.com', color: 'bg-sky-50 hover:bg-sky-100 text-sky-700 border-sky-200' },
+                { label: '📚 Student',   email: 'student@demo.com',   color: 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200' },
+              ].map((d) => (
+                <button
+                  key={d.email}
+                  type="button"
+                  onClick={() => { setEmail(d.email); setPassword('demo1234'); }}
+                  className={`flex items-center justify-between px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${d.color}`}
+                >
+                  <span>{d.label}</span>
+                  <span className="text-xs opacity-60">{d.email}</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-center text-slate-400 mt-2">Password: <code className="font-mono bg-slate-100 px-1 rounded">demo1234</code></p>
+          </div>
+        )}
       </div>
     </div>
   );
