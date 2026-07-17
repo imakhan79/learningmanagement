@@ -1,10 +1,26 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, Plus, Archive, CheckCircle2, Users } from 'lucide-react';
+import { BookOpen, Plus, Archive, CheckCircle2, Users, Star, Clock, Pencil } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { supabase, Course, Profile } from '../lib/supabase';
-import { Button, Card, Input, Textarea, Select, Badge, Spinner, EmptyState, Modal, formatDate } from '../components/ui';
+import { Button, Card, Input, Textarea, Select, Badge, Spinner, EmptyState, Modal, LiveBadge, AiBadge, ProgressBar, formatDate } from '../components/ui';
 
 const CATEGORIES = ['General', 'Science', 'Mathematics', 'Engineering', 'Humanities', 'Business', 'Computer Science', 'Arts'];
+
+// Deterministic gradient per course id for thumbnail backgrounds
+const GRADIENTS = [
+  'from-blue-500 via-indigo-500 to-purple-600',
+  'from-emerald-400 via-teal-500 to-cyan-600',
+  'from-orange-400 via-rose-500 to-pink-600',
+  'from-violet-500 via-purple-500 to-indigo-600',
+  'from-amber-400 via-orange-500 to-red-500',
+  'from-sky-400 via-blue-500 to-indigo-500',
+];
+
+function courseGradient(id: string) {
+  const sum = id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  return GRADIENTS[sum % GRADIENTS.length];
+}
+
 
 export default function CoursesPage() {
   const { profile } = useAuth();
@@ -16,6 +32,7 @@ export default function CoursesPage() {
   const [students, setStudents] = useState<Profile[]>([]);
   const [showEnroll, setShowEnroll] = useState<Course | null>(null);
   const [enrolledIds, setEnrolledIds] = useState<string[]>([]);
+  const [tab, setTab] = useState<'active' | 'draft' | 'archived'>('active');
 
   const load = async () => {
     setLoading(true);
@@ -49,80 +66,183 @@ export default function CoursesPage() {
     }
   }, [profile?.id]);
 
-  const statusColor = (s: string) =>
-    s === 'published' ? 'green' : s === 'approved' ? 'blue' : s === 'pending' ? 'amber' : s === 'archived' ? 'slate' : 'slate';
+  const filtered = courses.filter((c) => {
+    if (tab === 'active')   return c.status === 'published' || c.status === 'approved' || c.status === 'pending';
+    if (tab === 'draft')    return c.status === 'draft';
+    if (tab === 'archived') return c.status === 'archived';
+    return true;
+  });
 
   if (loading) return <Spinner />;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      {/* Header */}
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">Courses</h1>
-          <p className="text-sm text-slate-500">{role === 'student' ? 'Your enrolled and available courses' : 'Manage course catalog'}</p>
+          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">My Courses</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {role === 'student'
+              ? 'Your enrolled and available courses'
+              : 'Manage your curriculum and track student engagement across all platforms.'}
+          </p>
         </div>
         {role !== 'student' && (
-          <Button onClick={() => { setEditing(null); setShowForm(true); }}>
+          <Button variant="gradient" onClick={() => { setEditing(null); setShowForm(true); }}>
             <Plus size={16} /> New Course
           </Button>
         )}
       </div>
 
-      {courses.length === 0 ? (
-        <Card>
-          <EmptyState icon={<BookOpen size={32} />} title="No courses yet" subtitle={role !== 'student' ? 'Create your first course' : 'No courses available'} />
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 bg-white rounded-2xl border border-slate-100 shadow-sm w-fit">
+        {(['active', 'draft', 'archived'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-5 py-2 rounded-xl text-sm font-semibold capitalize transition-all duration-200 ${
+              tab === t
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {t === 'active' ? 'Active' : t === 'draft' ? 'Drafts' : 'Archived'}
+          </button>
+        ))}
+      </div>
+
+      {/* Course grid */}
+      {filtered.length === 0 ? (
+        <Card className="py-2">
+          <EmptyState
+            icon={<BookOpen size={28} />}
+            title={`No ${tab} courses`}
+            subtitle={role !== 'student' ? 'Create your first course to get started.' : 'No courses available in this category.'}
+          />
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {courses.map((c) => (
-            <Card key={c.id} className="p-5 flex flex-col">
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <Badge color={statusColor(c.status)}>{c.status}</Badge>
-                <Badge color="slate">{c.category}</Badge>
-              </div>
-              <h3 className="font-semibold text-slate-800 mb-1">{c.title}</h3>
-              <p className="text-sm text-slate-500 line-clamp-2 mb-3 flex-1">{c.description || 'No description'}</p>
-              {c.professor && <p className="text-xs text-slate-400 mb-3">By {c.professor.full_name || c.professor.email}</p>}
-              {role !== 'student' && <p className="text-xs text-slate-400 mb-3">{c.enrolled || 0} enrolled</p>}
-              <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
-                {role === 'student' ? (
-                  enrolledIds.includes(c.id) ? (
-                    <Badge color="green"><CheckCircle2 size={12} className="mr-1" /> Enrolled</Badge>
-                  ) : c.status === 'published' ? (
-                    <Button size="sm" variant="outline" onClick={async () => {
-                      await supabase.from('enrollments').insert({ course_id: c.id, student_id: profile!.id });
-                      load();
-                    }}>Enroll</Button>
-                  ) : null
-                ) : (
-                  <>
-                    <Button size="sm" variant="ghost" onClick={() => { setEditing(c); setShowForm(true); }}>Edit</Button>
-                    {role === 'admin' && (
-                      <Button size="sm" variant="outline" onClick={async () => {
-                        const next = c.status === 'pending' ? 'approved' : c.status === 'approved' ? 'published' : c.status;
-                        if (next !== c.status) {
-                          await supabase.from('courses').update({ status: next }).eq('id', c.id);
-                          load();
-                        }
-                      }}>
-                        {c.status === 'pending' ? 'Approve' : c.status === 'approved' ? 'Publish' : 'Approved'}
-                      </Button>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filtered.map((c) => {
+            const grad = courseGradient(c.id);
+            const isEnrolled = enrolledIds.includes(c.id);
+            const isLive = c.status === 'published';
+            const isAiGenerated = c.category === 'Computer Science';
+
+            return (
+              <div key={c.id} className="bg-white rounded-3xl overflow-hidden border border-slate-100 shadow-sm card-hover flex flex-col">
+                {/* Thumbnail */}
+                <div className={`relative h-40 bg-gradient-to-br ${grad} flex items-center justify-center`}>
+                  {/* Pattern overlay */}
+                  <div className="absolute inset-0 opacity-20"
+                    style={{
+                      backgroundImage: 'radial-gradient(circle at 20% 80%, white 1px, transparent 1px), radial-gradient(circle at 80% 20%, white 1px, transparent 1px)',
+                      backgroundSize: '30px 30px',
+                    }}
+                  />
+                  <div className="relative text-white/30 text-8xl font-black select-none">
+                    {c.title.charAt(0)}
+                  </div>
+                  {/* Status badge top-left */}
+                  <div className="absolute top-3 left-3">
+                    {isLive ? <LiveBadge /> : isAiGenerated ? <AiBadge /> : (
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-white/20 text-white backdrop-blur-sm`}>
+                        {c.status}
+                      </span>
                     )}
-                    <Button size="sm" variant="ghost" onClick={() => setShowEnroll(c)}>
-                      <Users size={14} /> Assign
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={async () => {
-                      await supabase.from('courses').update({ status: 'archived' }).eq('id', c.id);
-                      load();
-                    }}>
-                      <Archive size={14} />
-                    </Button>
-                  </>
-                )}
-                <span className="text-xs text-slate-400 ml-auto">{formatDate(c.created_at)}</span>
+                  </div>
+                  {/* Category top-right */}
+                  <div className="absolute top-3 right-3">
+                    <span className="text-xs font-semibold bg-black/25 text-white px-2.5 py-1 rounded-full backdrop-blur-sm">
+                      {c.category}
+                    </span>
+                  </div>
+                  {/* Edit button for non-students */}
+                  {role !== 'student' && (
+                    <button
+                      onClick={() => { setEditing(c); setShowForm(true); }}
+                      className="absolute bottom-3 right-3 w-8 h-8 bg-white/20 backdrop-blur-sm hover:bg-white/40 rounded-full flex items-center justify-center text-white transition-all"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Content */}
+                <div className="p-4 flex flex-col flex-1">
+                  <h3 className="font-bold text-slate-800 text-base leading-snug mb-1.5 line-clamp-2">{c.title}</h3>
+                  <p className="text-sm text-slate-500 line-clamp-2 mb-3 flex-1">{c.description || 'No description provided.'}</p>
+
+                  {/* Stats row */}
+                  {role !== 'student' ? (
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between text-xs text-slate-500 mb-1.5">
+                        <span className="font-medium">Enrollment Progress</span>
+                        <span className="font-bold text-slate-700 flex items-center gap-1">
+                          <Users size={11} /> {c.enrolled || 0} Students
+                        </span>
+                      </div>
+                      <ProgressBar value={Math.min(100, ((c.enrolled || 0) / 50) * 100)} color="blue" />
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3 text-xs text-slate-500 mb-3">
+                      {c.professor && (
+                        <span className="flex items-center gap-1">
+                          <Star size={11} className="text-amber-400" /> {c.professor.full_name || c.professor.email}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Footer actions */}
+                  <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-2">
+                    {role === 'student' ? (
+                      isEnrolled ? (
+                        <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
+                          <CheckCircle2 size={14} /> Enrolled
+                        </span>
+                      ) : c.status === 'published' ? (
+                        <Button size="sm" variant="gradient" onClick={async () => {
+                          await supabase.from('enrollments').insert({ course_id: c.id, student_id: profile!.id });
+                          load();
+                        }}>
+                          Enroll Now
+                        </Button>
+                      ) : null
+                    ) : (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {role === 'admin' && c.status === 'pending' && (
+                          <Button size="sm" variant="primary" onClick={async () => {
+                            await supabase.from('courses').update({ status: 'approved' }).eq('id', c.id);
+                            load();
+                          }}>Approve</Button>
+                        )}
+                        {role === 'admin' && c.status === 'approved' && (
+                          <Button size="sm" variant="gradient" onClick={async () => {
+                            await supabase.from('courses').update({ status: 'published' }).eq('id', c.id);
+                            load();
+                          }}>Publish</Button>
+                        )}
+                        <Button size="sm" variant="ghost" onClick={() => setShowEnroll(c)}>
+                          <Users size={13} /> Assign
+                        </Button>
+                        {c.status !== 'archived' && (
+                          <Button size="sm" variant="ghost" onClick={async () => {
+                            await supabase.from('courses').update({ status: 'archived' }).eq('id', c.id);
+                            load();
+                          }}>
+                            <Archive size={13} />
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                    <span className="text-[11px] text-slate-400 ml-auto flex items-center gap-1">
+                      <Clock size={11} /> {formatDate(c.created_at)}
+                    </span>
+                  </div>
+                </div>
               </div>
-            </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -180,7 +300,7 @@ function CourseForm({ course, onClose, onSaved }: { course: Course | null; onClo
         ]} />
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={saving || !title}>{saving ? 'Saving…' : 'Save'}</Button>
+          <Button variant="gradient" onClick={save} disabled={saving || !title}>{saving ? 'Saving…' : 'Save Course'}</Button>
         </div>
       </div>
     </Modal>
@@ -215,21 +335,24 @@ function EnrollModal({ course, students, onClose, onDone }: { course: Course; st
   };
 
   return (
-    <Modal open onClose={onClose} title={`Assign students — ${course.title}`} size="lg">
+    <Modal open onClose={onClose} title={`Assign Students — ${course.title}`} size="lg">
       {loading ? <Spinner /> : (
         <>
           <p className="text-sm text-slate-500 mb-4">{existing.size} already enrolled. Select additional students to assign.</p>
-          <div className="max-h-80 overflow-y-auto space-y-1 border border-slate-200 rounded-lg p-2">
+          <div className="max-h-80 overflow-y-auto space-y-1 border border-slate-100 rounded-xl p-2 bg-slate-50">
             {students.length === 0 ? (
               <p className="text-sm text-slate-400 text-center py-4">No students found</p>
             ) : students.map((s) => {
               const isEx = existing.has(s.id);
               const isSel = selected.has(s.id);
               return (
-                <label key={s.id} className={`flex items-center gap-3 p-2 rounded-md cursor-pointer ${isSel ? 'bg-sky-50' : 'hover:bg-slate-50'} ${isEx ? 'opacity-60' : ''}`}>
-                  <input type="checkbox" checked={isSel || isEx} disabled={isEx} onChange={() => toggle(s.id)} className="rounded border-slate-300 text-sky-600 focus:ring-sky-500" />
+                <label key={s.id} className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-colors ${isSel ? 'bg-blue-50' : 'hover:bg-white'} ${isEx ? 'opacity-60' : ''}`}>
+                  <input type="checkbox" checked={isSel || isEx} disabled={isEx} onChange={() => toggle(s.id)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
+                    {(s.full_name || s.email).charAt(0).toUpperCase()}
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-700 truncate">{s.full_name || s.email}</p>
+                    <p className="text-sm font-semibold text-slate-700 truncate">{s.full_name || s.email}</p>
                     <p className="text-xs text-slate-400 truncate">{s.email}</p>
                   </div>
                   {isEx && <Badge color="green">Enrolled</Badge>}
@@ -239,7 +362,9 @@ function EnrollModal({ course, students, onClose, onDone }: { course: Course; st
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button onClick={save} disabled={selected.size === 0}>Assign {selected.size || ''}</Button>
+            <Button variant="gradient" onClick={save} disabled={selected.size === 0}>
+              Assign {selected.size > 0 ? `${selected.size} Students` : ''}
+            </Button>
           </div>
         </>
       )}

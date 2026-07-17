@@ -16,35 +16,38 @@ export function StatCard({
   trendLabel?: string;
   color?: string;
 }) {
-  const colors: Record<string, string> = {
-    sky: 'bg-sky-50 text-sky-600',
-    emerald: 'bg-emerald-50 text-emerald-600',
-    amber: 'bg-amber-50 text-amber-600',
-    rose: 'bg-rose-50 text-rose-600',
-    violet: 'bg-violet-50 text-violet-600',
-    slate: 'bg-slate-100 text-slate-600',
+  const colors: Record<string, { bg: string; icon: string; val: string }> = {
+    sky:     { bg: 'bg-blue-50',    icon: 'bg-blue-100 text-blue-600',     val: 'text-blue-700' },
+    emerald: { bg: 'bg-emerald-50', icon: 'bg-emerald-100 text-emerald-600', val: 'text-emerald-700' },
+    amber:   { bg: 'bg-amber-50',   icon: 'bg-amber-100 text-amber-600',   val: 'text-amber-700' },
+    rose:    { bg: 'bg-red-50',     icon: 'bg-red-100 text-red-600',       val: 'text-red-700' },
+    violet:  { bg: 'bg-violet-50',  icon: 'bg-violet-100 text-violet-600', val: 'text-violet-700' },
+    slate:   { bg: 'bg-slate-50',   icon: 'bg-slate-100 text-slate-600',   val: 'text-slate-700' },
   };
+  const c = colors[color] || colors.sky;
   const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus;
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+    <div className={`${c.bg} rounded-2xl p-5 border border-white shadow-sm card-hover`}>
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{label}</p>
-          <p className="mt-2 text-2xl font-bold text-slate-800">{value}</p>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{label}</p>
+          <p className={`mt-2 text-3xl font-extrabold ${c.val}`}>{value}</p>
         </div>
         {icon && (
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${colors[color] || colors.sky}`}>
+          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm ${c.icon}`}>
             {icon}
           </div>
         )}
       </div>
       {trendLabel && (
-        <div className="mt-3 flex items-center gap-1 text-xs">
+        <div className="mt-3 flex items-center gap-1.5 text-xs font-medium">
           <TrendIcon
-            size={14}
-            className={trend === 'up' ? 'text-emerald-500' : trend === 'down' ? 'text-rose-500' : 'text-slate-400'}
+            size={13}
+            className={trend === 'up' ? 'text-emerald-500' : trend === 'down' ? 'text-red-500' : 'text-slate-400'}
           />
-          <span className="text-slate-500">{trendLabel}</span>
+          <span className={trend === 'up' ? 'text-emerald-600' : trend === 'down' ? 'text-red-500' : 'text-slate-400'}>
+            {trendLabel}
+          </span>
         </div>
       )}
     </div>
@@ -53,9 +56,9 @@ export function StatCard({
 
 export function ChartCard({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-slate-700">{title}</h3>
+    <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="text-sm font-bold text-slate-700">{title}</h3>
         {action}
       </div>
       {children}
