@@ -249,7 +249,7 @@ export default function CoursesPage() {
                         )}
                       </div>
                     )}
-                    <span className="text-[11px] text-slate-400 ml-auto flex items-center gap-1">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-auto flex items-center gap-1">
                       <Clock size={11} /> {formatDate(c.created_at)}
                     </span>
                   </div>
@@ -278,23 +278,23 @@ export default function CoursesPage() {
       )}
 
       {showOutline && (
-        <Modal open onClose={() => setShowOutline(null)} title="Course Outline" size="md">
-          <div className="space-y-4">
+        <Modal open onClose={() => setShowOutline(null)} title="Course Outline" maxW="max-w-xl">
+          <div className="space-y-5 p-6 pt-2">
             <div>
-              <h3 className="text-lg font-bold text-slate-800">{showOutline.title}</h3>
-              <div className="flex gap-2 mt-1">
+              <h3 className="text-2xl font-black text-slate-800 tracking-tight">{showOutline.title}</h3>
+              <div className="flex gap-2 mt-2">
                 <Badge color="slate">{showOutline.category}</Badge>
                 {showOutline.professor && (
-                  <Badge color="blue">By {showOutline.professor.full_name || showOutline.professor.email}</Badge>
+                  <Badge color="primary">Instructor: {showOutline.professor.full_name || showOutline.professor.email}</Badge>
                 )}
               </div>
             </div>
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-              <h4 className="font-semibold text-slate-700 mb-2">Description</h4>
-              <p className="text-sm text-slate-600 whitespace-pre-wrap">{showOutline.description || 'No detailed description available.'}</p>
+            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
+              <h4 className="font-bold text-slate-700 mb-2">Description</h4>
+              <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">{showOutline.description || 'No detailed description available.'}</p>
             </div>
             <div className="flex justify-end pt-2">
-              <Button onClick={() => setShowOutline(null)}>Close</Button>
+              <Button variant="secondary" onClick={() => setShowOutline(null)}>Close</Button>
             </div>
           </div>
         </Modal>
@@ -323,24 +323,42 @@ function CourseForm({ course, onClose, onSaved }: { course: Course | null; onClo
   };
 
   return (
-    <Modal open onClose={onClose} title={course ? 'Edit Course' : 'New Course'}>
-      <div className="space-y-4">
-        <Input label="Title" value={title} onChange={setTitle} placeholder="Introduction to Biology" required />
-        <Textarea label="Description" value={description} onChange={setDescription} placeholder="Course overview…" rows={4} />
-        <Select label="Category" value={category} onChange={setCategory} options={CATEGORIES.map((c) => ({ value: c, label: c }))} />
-        <Select label="Status" value={status} onChange={(v) => setStatus(v as any)} options={[
-          { value: 'draft', label: 'Draft' },
-          { value: 'pending', label: 'Pending Approval' },
-          { value: 'approved', label: 'Approved' },
-          { value: 'published', label: 'Published' },
-          { value: 'archived', label: 'Archived' },
-        ].filter(o => 
-          profile?.role === 'admin' ? true : 
-          ['draft', 'pending', 'published', 'archived'].includes(o.value)
-        )} />
-        <div className="flex justify-end gap-2 pt-2">
+    <Modal open onClose={onClose} title={course ? 'Edit Course' : 'Create New Course'} maxW="max-w-lg">
+      <div className="space-y-5 p-6 pt-2">
+        <div>
+          <label className="label">Course Title</label>
+          <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Advanced Machine Learning" required />
+        </div>
+        <div>
+          <label className="label">Course Description</label>
+          <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Provide a detailed overview of what students will learn..." rows={4} />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">Category</label>
+            <Select value={category} onChange={e => setCategory(e.target.value)}>
+              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </Select>
+          </div>
+          <div>
+            <label className="label">Status</label>
+            <Select value={status} onChange={e => setStatus(e.target.value as any)}>
+              {[
+                { value: 'draft', label: 'Draft' },
+                { value: 'pending', label: 'Pending Approval' },
+                { value: 'approved', label: 'Approved' },
+                { value: 'published', label: 'Published' },
+                { value: 'archived', label: 'Archived' },
+              ].filter(o => 
+                profile?.role === 'admin' ? true : 
+                ['draft', 'pending', 'published', 'archived'].includes(o.value)
+              ).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </Select>
+          </div>
+        </div>
+        <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="gradient" onClick={save} disabled={saving || !title}>{saving ? 'Saving…' : 'Save Course'}</Button>
+          <Button variant="gradient" onClick={save} disabled={saving || !title}>{saving ? 'Saving...' : 'Save Course'}</Button>
         </div>
       </div>
     </Modal>
@@ -375,39 +393,44 @@ function EnrollModal({ course, students, onClose, onDone }: { course: Course; st
   };
 
   return (
-    <Modal open onClose={onClose} title={`Assign Students — ${course.title}`} size="lg">
-      {loading ? <Spinner /> : (
-        <>
-          <p className="text-sm text-slate-500 mb-4">{existing.size} already enrolled. Select additional students to assign.</p>
-          <div className="max-h-80 overflow-y-auto space-y-1 border border-slate-100 rounded-xl p-2 bg-slate-50">
-            {students.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4">No students found</p>
-            ) : students.map((s) => {
-              const isEx = existing.has(s.id);
-              const isSel = selected.has(s.id);
-              return (
-                <label key={s.id} className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-colors ${isSel ? 'bg-blue-50' : 'hover:bg-white'} ${isEx ? 'opacity-60' : ''}`}>
-                  <input type="checkbox" checked={isSel || isEx} disabled={isEx} onChange={() => toggle(s.id)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
-                    {(s.full_name || s.email).charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-700 truncate">{s.full_name || s.email}</p>
-                    <p className="text-xs text-slate-400 truncate">{s.email}</p>
-                  </div>
-                  {isEx && <Badge color="green">Enrolled</Badge>}
-                </label>
-              );
-            })}
-          </div>
-          <div className="flex justify-end gap-2 pt-4">
-            <Button variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button variant="gradient" onClick={save} disabled={selected.size === 0}>
-              Assign {selected.size > 0 ? `${selected.size} Students` : ''}
-            </Button>
-          </div>
-        </>
-      )}
+    <Modal open onClose={onClose} title={`Assign Students`} maxW="max-w-2xl">
+      <div className="p-6 pt-2">
+        <div className="mb-5">
+          <h3 className="font-bold text-slate-800">{course.title}</h3>
+          <p className="text-sm text-slate-500">{existing.size} already enrolled. Select additional students to assign.</p>
+        </div>
+        {loading ? <Spinner /> : (
+          <>
+            <div className="max-h-96 overflow-y-auto space-y-1.5 border border-slate-100 rounded-2xl p-2.5 bg-slate-50 shadow-inner-soft">
+              {students.length === 0 ? (
+                <p className="text-sm text-slate-400 font-medium text-center py-6">No students found</p>
+              ) : students.map((s) => {
+                const isEx = existing.has(s.id);
+                const isSel = selected.has(s.id);
+                return (
+                  <label key={s.id} className={`flex items-center gap-4 p-3 rounded-xl cursor-pointer transition-all border ${isSel ? 'bg-primary-50 border-primary-100 shadow-sm' : 'bg-white border-transparent hover:border-slate-200'} ${isEx ? 'opacity-60 cursor-not-allowed grayscale' : ''}`}>
+                    <input type="checkbox" checked={isSel || isEx} disabled={isEx} onChange={() => toggle(s.id)} className="w-5 h-5 rounded-md border-slate-300 text-primary-600 focus:ring-primary-500" />
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-sm">
+                      {(s.full_name || s.email).charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-800 truncate">{s.full_name || s.email}</p>
+                      <p className="text-xs text-slate-500 truncate">{s.email}</p>
+                    </div>
+                    {isEx && <Badge color="success">Enrolled</Badge>}
+                  </label>
+                );
+              })}
+            </div>
+            <div className="flex justify-end gap-3 pt-6 mt-2 border-t border-slate-100">
+              <Button variant="ghost" onClick={onClose}>Cancel</Button>
+              <Button variant="gradient" onClick={save} disabled={selected.size === 0}>
+                Assign {selected.size > 0 ? `${selected.size} Student${selected.size > 1 ? 's' : ''}` : ''}
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
     </Modal>
   );
 }

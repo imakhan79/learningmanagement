@@ -19,6 +19,8 @@ const AuditPage = lazy(() => import('./pages/AuditPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const LivePage = lazy(() => import('./pages/LivePage'));
 const FinancePage = lazy(() => import('./pages/FinancePage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const CertificatePage = lazy(() => import('./pages/CertificatePage'));
 import { Spinner } from './components/ui';
 
 function AppInner() {
@@ -69,6 +71,8 @@ function AppInner() {
       case 'audit': return role === 'admin' ? <AuditPage /> : <DashboardPage />;
       case 'live': return <LivePage />;
       case 'finance': return role === 'admin' || role === 'student' ? <FinancePage /> : <DashboardPage />;
+      case 'profile': return <ProfilePage />;
+      case 'certificates': return role === 'student' ? <CertificatePage /> : <DashboardPage />;
       case 'settings': return role === 'admin' ? <SettingsPage /> : <DashboardPage />;
       default: return <DashboardPage />;
     }

@@ -81,24 +81,28 @@ export default function LecturesPage() {
   if (!selectedCourse) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-xl font-bold text-slate-800">Lectures</h1>
-          <p className="text-sm text-slate-500">Select a course to view lectures</p>
+        <div className="flex flex-col gap-1 mb-8">
+          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Lectures & Materials</h1>
+          <p className="text-slate-500 font-medium">Select a course to view its curriculum</p>
         </div>
         {courses.length === 0 ? (
-          <Card><EmptyState icon={<FileText size={32} />} title="No courses" subtitle={role === 'student' ? 'Enroll in a course first' : 'Create a course first'} /></Card>
+          <Card className="py-4">
+            <EmptyState icon={<FileText size={32} />} title="No courses available" subtitle={role === 'student' ? 'Enroll in a course first' : 'Create a course first'} />
+          </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {courses.map((c) => (
-              <Card key={c.id} className="p-5 cursor-pointer hover:border-sky-300 hover:shadow-md transition-all" >
-                <div className="flex items-center justify-between mb-2">
+              <div key={c.id} onClick={() => loadLectures(c)} className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm card-hover cursor-pointer flex flex-col group">
+                <div className="flex items-center justify-between mb-4">
                   <Badge color="slate">{c.category}</Badge>
-                  <Badge color={c.status === 'published' ? 'green' : 'amber'}>{c.status}</Badge>
+                  <Badge color={c.status === 'published' ? 'success' : 'warning'}>{c.status}</Badge>
                 </div>
-                <h3 className="font-semibold text-slate-800 mb-1">{c.title}</h3>
-                <p className="text-sm text-slate-500 line-clamp-2 mb-3">{c.description || 'No description'}</p>
-                <Button size="sm" variant="outline" onClick={() => loadLectures(c)}><Play size={14} /> View Lectures</Button>
-              </Card>
+                <h3 className="font-bold text-slate-800 text-lg leading-snug mb-2 group-hover:text-primary-600 transition-colors">{c.title}</h3>
+                <p className="text-sm text-slate-500 line-clamp-2 mb-6 flex-1">{c.description || 'No description provided'}</p>
+                <div className="flex items-center text-sm font-bold text-primary-600 group-hover:translate-x-1 transition-transform w-fit gap-1">
+                  <Play size={14} className="fill-primary-600" /> View Curriculum
+                </div>
+              </div>
             ))}
           </div>
         )}
@@ -108,86 +112,90 @@ export default function LecturesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => { setSelectedCourse(null); setLectures([]); }}><ArrowLeft size={16} /> Back</Button>
-        <div className="flex-1">
-          <h1 className="text-xl font-bold text-slate-800">{selectedCourse.title}</h1>
-          <p className="text-sm text-slate-500">Lectures & materials</p>
+      <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <button onClick={() => { setSelectedCourse(null); setLectures([]); }} className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm">
+            <ArrowLeft size={18} />
+          </button>
+          <div>
+            <h1 className="text-2xl font-black text-slate-800 tracking-tight">{selectedCourse.title}</h1>
+            <p className="text-slate-500 font-medium text-sm">Course Curriculum</p>
+          </div>
         </div>
         {role === 'professor' && (
-          <Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus size={16} /> New Lecture</Button>
+          <Button variant="gradient" onClick={() => { setEditing(null); setShowForm(true); }}><Plus size={16} /> New Lecture</Button>
         )}
       </div>
 
       {loading ? <Spinner /> : lectures.length === 0 ? (
-        <Card><EmptyState icon={<FileText size={32} />} title="No lectures yet" subtitle={role === 'professor' ? 'Create your first lecture' : 'No lectures available'} /></Card>
+        <Card className="py-4"><EmptyState icon={<FileText size={32} />} title="No curriculum yet" subtitle={role === 'professor' ? 'Create your first lecture' : 'No lectures available for this course'} /></Card>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {lectures.map((l) => (
-            <Card key={l.id} className="p-4">
-              <div className="flex items-start gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-slate-800">{l.title}</h3>
-                    {role === 'student' && l.progress?.completed_at && <Badge color="green">Completed</Badge>}
-                  </div>
-                  {l.description && <p className="text-sm text-slate-500 mb-2">{l.description}</p>}
-                  {l.learning_objectives && (
-                    <p className="text-xs text-slate-400 mb-2"><span className="font-medium">Objectives:</span> {l.learning_objectives}</p>
-                  )}
-                  <div className="flex items-center gap-3 text-xs text-slate-400 mb-2">
-                    <span>{formatDuration(l.duration_seconds)}</span>
-                    <span>•</span>
-                    <span>Published {formatDate(l.publish_date)}</span>
-                    {(l.materials || []).length > 0 && (<><span>•</span><span>{l.materials!.length} materials</span></>)}
-                  </div>
-                  {role === 'student' && l.progress && (
-                    <div className="flex items-center gap-2 mt-2">
-                      <ProgressBar value={l.progress.completion_pct || 0} className="flex-1 max-w-xs" />
-                      <span className="text-xs text-slate-500">{Math.round(l.progress.completion_pct || 0)}%</span>
-                      {l.progress.last_position_seconds > 0 && !l.progress.completed_at && (
-                        <span className="text-xs text-sky-600">Resume @ {formatDuration(l.progress.last_position_seconds)}</span>
-                      )}
-                    </div>
-                  )}
-                  {(l.materials || []).length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      {(l.materials || []).map((m) => (
-                        <div key={m.id} className="flex items-center gap-1.5">
-                          <a href={m.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs hover:bg-slate-200">
-                            <Download size={12} /> {m.title} <Badge color="slate">{m.type}</Badge>
-                          </a>
-                          {role === 'student' && m.type === 'worksheet' && (
-                            <Button size="sm" variant={submissions.has(m.id) ? "ghost" : "primary"} onClick={() => submitWorksheet(m.id)} disabled={submissions.has(m.id)}>
-                              {submissions.has(m.id) ? 'Completed' : 'Mark as Complete'}
-                            </Button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+            <div key={l.id} className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col md:flex-row gap-5 group hover:border-slate-200 transition-all">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-3 mb-2">
+                  <h3 className="font-bold text-slate-800 text-lg">{l.title}</h3>
+                  {role === 'student' && l.progress?.completed_at && <Badge color="success">Completed</Badge>}
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  {role === 'student' ? (
-                    <>
-                      <Button size="sm" variant="outline" onClick={() => setWatching(l)}><Play size={14} /> Watch</Button>
-                      <Button size="sm" variant="ghost" onClick={() => toggleBookmark(l.id)}>
-                        <Bookmark size={14} className={bookmarks.has(l.id) ? 'fill-sky-500 text-sky-500' : ''} />
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button size="sm" variant="ghost" onClick={() => { setEditing(l); setShowForm(true); }}>Edit</Button>
-                      <UploadButton lecture={l} onDone={() => loadLectures(selectedCourse)} />
-                      <Button size="sm" variant="ghost" onClick={async () => {
-                        await supabase.from('lectures').delete().eq('id', l.id);
-                        loadLectures(selectedCourse);
-                      }}><Trash2 size={14} /></Button>
-                    </>
-                  )}
+                {l.description && <p className="text-sm text-slate-500 mb-3 leading-relaxed">{l.description}</p>}
+                {l.learning_objectives && (
+                  <div className="bg-primary-50 text-primary-800 text-xs px-3 py-2 rounded-lg mb-3 font-medium flex items-start gap-2">
+                    <span className="font-bold text-primary-600 mt-0.5">Focus:</span>
+                    <span>{l.learning_objectives}</span>
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+                  <span className="flex items-center gap-1.5"><Clock size={12} /> {formatDuration(l.duration_seconds)}</span>
+                  <span>Published {formatDate(l.publish_date)}</span>
+                  {(l.materials || []).length > 0 && (<span className="text-primary-600 bg-primary-50 px-2 py-0.5 rounded-md">{l.materials!.length} Resources</span>)}
                 </div>
+                {role === 'student' && l.progress && (
+                  <div className="flex items-center gap-3 mt-4 bg-slate-50 p-2 rounded-xl border border-slate-100">
+                    <div className="flex-1 max-w-xs"><ProgressBar value={l.progress.completion_pct || 0} color="success" size="sm" /></div>
+                    <span className="text-xs font-bold text-slate-600">{Math.round(l.progress.completion_pct || 0)}%</span>
+                    {l.progress.last_position_seconds > 0 && !l.progress.completed_at && (
+                      <span className="text-xs font-bold text-primary-600 ml-2">Resume at {formatDuration(l.progress.last_position_seconds)}</span>
+                    )}
+                  </div>
+                )}
+                {(l.materials || []).length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100">
+                    {(l.materials || []).map((m) => (
+                      <div key={m.id} className="flex items-center gap-1.5">
+                        <a href={m.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:border-slate-300 hover:bg-slate-50 transition-all shadow-sm">
+                          <Download size={13} className="text-slate-400" /> {m.title} <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase text-[10px]">{m.type}</span>
+                        </a>
+                        {role === 'student' && m.type === 'worksheet' && (
+                          <button onClick={() => submitWorksheet(m.id)} disabled={submissions.has(m.id)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${submissions.has(m.id) ? 'bg-success-50 text-success-700' : 'bg-primary-50 text-primary-700 hover:bg-primary-100'}`}>
+                            {submissions.has(m.id) ? '✓ Done' : 'Complete Task'}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </Card>
+              <div className="flex flex-row md:flex-col gap-2 shrink-0 md:w-32 border-t md:border-t-0 md:border-l border-slate-100 pt-4 md:pt-0 md:pl-5">
+                {role === 'student' ? (
+                  <>
+                    <Button variant="gradient" className="flex-1 md:flex-none justify-center" onClick={() => setWatching(l)}><Play size={14} className="fill-white" /> Watch</Button>
+                    <Button variant={bookmarks.has(l.id) ? 'primary' : 'secondary'} className={`flex-1 md:flex-none justify-center ${bookmarks.has(l.id) ? 'bg-sky-100 text-sky-700 hover:bg-sky-200' : ''}`} onClick={() => toggleBookmark(l.id)}>
+                      <Bookmark size={14} className={bookmarks.has(l.id) ? 'fill-sky-700' : ''} /> {bookmarks.has(l.id) ? 'Saved' : 'Save'}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button size="sm" variant="secondary" onClick={() => { setEditing(l); setShowForm(true); }}>Edit</Button>
+                    <UploadButton lecture={l} onDone={() => loadLectures(selectedCourse)} />
+                    <Button size="sm" variant="ghost" className="text-danger-600 hover:bg-danger-50 hover:text-danger-700" onClick={async () => {
+                      await supabase.from('lectures').delete().eq('id', l.id);
+                      loadLectures(selectedCourse);
+                    }}><Trash2 size={14} /> Delete</Button>
+                  </>
+                )}
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -225,18 +233,33 @@ function LectureForm({ course, lecture, onClose, onSaved }: { course: Course; le
   };
 
   return (
-    <Modal open onClose={onClose} title={lecture ? 'Edit Lecture' : 'New Lecture'}>
-      <div className="space-y-4">
-        <Input label="Title" value={title} onChange={setTitle} placeholder="Lecture 1: Introduction" required />
-        <Textarea label="Description" value={description} onChange={setDescription} rows={3} />
-        <div className="grid grid-cols-2 gap-3">
-          <Input label="Duration (seconds)" value={duration} onChange={setDuration} type="number" />
-          <Input label="Order" value={order} onChange={setOrder} type="number" />
+    <Modal open onClose={onClose} title={lecture ? 'Edit Lecture' : 'New Lecture'} maxW="max-w-lg">
+      <div className="space-y-4 p-6 pt-2">
+        <div>
+          <label className="label">Title</label>
+          <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Lecture 1: Introduction" required />
         </div>
-        <Textarea label="Learning Objectives" value={objectives} onChange={setObjectives} rows={2} placeholder="By the end, students will…" />
-        <div className="flex justify-end gap-2 pt-2">
+        <div>
+          <label className="label">Description</label>
+          <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="Brief overview of the lecture content..." />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">Duration (sec)</label>
+            <Input value={duration} onChange={e => setDuration(e.target.value)} type="number" />
+          </div>
+          <div>
+            <label className="label">Order Index</label>
+            <Input value={order} onChange={e => setOrder(e.target.value)} type="number" />
+          </div>
+        </div>
+        <div>
+          <label className="label">Learning Objectives</label>
+          <Textarea value={objectives} onChange={e => setObjectives(e.target.value)} rows={2} placeholder="By the end, students will..." />
+        </div>
+        <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={saving || !title}>{saving ? 'Saving…' : 'Save'}</Button>
+          <Button variant="gradient" onClick={save} disabled={saving || !title}>{saving ? 'Saving...' : 'Save Lecture'}</Button>
         </div>
       </div>
     </Modal>
@@ -267,19 +290,31 @@ function UploadButton({ lecture, onDone }: { lecture: Lecture; onDone: () => voi
 
   return (
     <>
-      <Button size="sm" variant="ghost" onClick={() => setOpen(true)}><Upload size={14} /></Button>
-      <Modal open={open} onClose={() => setOpen(false)} title="Add Material">
-        <div className="space-y-4">
-          <Select label="Type" value={type} onChange={(v) => setType(v as any)} options={[
-            { value: 'video', label: 'Video' }, { value: 'pdf', label: 'PDF' }, { value: 'book', label: 'Book' },
-            { value: 'note', label: 'Note' }, { value: 'worksheet', label: 'Worksheet' },
-          ]} />
-          <Input label="Title" value={title} onChange={setTitle} placeholder="Lecture slides" />
-          <Input label="URL" value={url} onChange={setUrl} placeholder="https://…" />
-          <p className="text-xs text-slate-400">Paste a link to the file (video stream URL, PDF, etc.).</p>
-          <div className="flex justify-end gap-2 pt-2">
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)}><Upload size={14} /> Attach</Button>
+      <Modal open={open} onClose={() => setOpen(false)} title="Attach Material" maxW="max-w-md">
+        <div className="space-y-4 p-6 pt-2">
+          <div>
+            <label className="label">Material Type</label>
+            <Select value={type} onChange={e => setType(e.target.value as any)}>
+              <option value="video">Video</option>
+              <option value="pdf">PDF Document</option>
+              <option value="book">E-Book</option>
+              <option value="note">Notes</option>
+              <option value="worksheet">Worksheet</option>
+            </Select>
+          </div>
+          <div>
+            <label className="label">Title</label>
+            <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Chapter 1 Slides" />
+          </div>
+          <div>
+            <label className="label">URL</label>
+            <Input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://..." />
+            <p className="text-[11px] text-slate-400 font-medium mt-1.5">Paste a direct link to the file or resource.</p>
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
             <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving || !url}>{saving ? 'Uploading…' : 'Add'}</Button>
+            <Button variant="gradient" onClick={save} disabled={saving || !url}>{saving ? 'Uploading...' : 'Attach'}</Button>
           </div>
         </div>
       </Modal>
@@ -311,12 +346,10 @@ function WatchModal({ lecture, course, onClose }: { lecture: Lecture; course: Co
       } else {
         const { data: actData } = await startLectureActivity(lecture.id);
         if (actData?.[0]?.id) setActivityId(actData[0].id);
-        // watch_events start already logged in startLectureActivity via backend? not needed here
       }
     })();
   }, [lecture.id]);
 
-  // simulate playback timer
   useEffect(() => {
     if (!playing) return;
     const interval = setInterval(() => {
@@ -329,7 +362,6 @@ function WatchModal({ lecture, course, onClose }: { lecture: Lecture; course: Co
     return () => clearInterval(interval);
   }, [playing]);
 
-  // persist progress every 5s using lecture_activity
   useEffect(() => {
     if (!activityId) return;
     if (!progress && position === 0) return;
@@ -365,35 +397,37 @@ function WatchModal({ lecture, course, onClose }: { lecture: Lecture; course: Co
   const pct = Math.min(100, (position / dur) * 100);
 
   return (
-    <Modal open onClose={onClose} title={lecture.title} size="lg">
-      <div className="space-y-4">
-        <div className="aspect-video bg-slate-900 rounded-lg flex items-center justify-center relative overflow-hidden">
-          <div className="text-center text-white">
-            <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mx-auto mb-3">
-              <Play size={28} className="ml-1" />
-            </div>
-            <p className="text-sm text-slate-300">Video Player (demo)</p>
-            <p className="text-xs text-slate-400 mt-1">{course.title}</p>
+    <Modal open onClose={onClose} title={lecture.title} maxW="max-w-3xl">
+      <div className="p-6 pt-2 space-y-5">
+        <div className="aspect-video bg-slate-900 rounded-2xl flex items-center justify-center relative overflow-hidden shadow-inner group">
+          <div className="text-center text-white relative z-10 transition-transform group-hover:scale-105 duration-500">
+            <button onClick={togglePlay} className="w-20 h-20 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md flex items-center justify-center mx-auto mb-4 transition-all hover:scale-110 shadow-lg ring-1 ring-white/20">
+              {playing ? <div className="w-6 h-6 border-l-4 border-r-4 border-white" /> : <Play size={36} className="ml-2 fill-white text-white drop-shadow-md" />}
+            </button>
+            <p className="text-sm font-bold text-white tracking-wide">Interactive Video Player</p>
+            <p className="text-xs font-semibold text-white/50 mt-1 uppercase tracking-widest">{course.title}</p>
           </div>
-          <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/70 to-transparent">
-            <div className="w-full bg-white/20 rounded-full h-1.5 mb-2 overflow-hidden">
-              <div className="h-full bg-sky-400 rounded-full" style={{ width: `${pct}%` }} />
+          <div className="absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col gap-3">
+            <div className="w-full bg-white/20 rounded-full h-1.5 overflow-hidden backdrop-blur-sm relative">
+              <div className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-sky-400 to-blue-500 rounded-full" style={{ width: `${pct}%` }} />
             </div>
-            <div className="flex items-center justify-between text-xs text-white">
-              <span>{formatDuration(position)} / {formatDuration(lecture.duration_seconds)}</span>
-              <button onClick={togglePlay} className="px-3 py-1 rounded-md bg-white/20 hover:bg-white/30">
-                {playing ? 'Pause' : 'Play'}
-              </button>
+            <div className="flex items-center justify-between text-xs font-bold text-white">
+              <span>{formatDuration(position)} <span className="text-white/40">/ {formatDuration(lecture.duration_seconds)}</span></span>
+              <span className="bg-black/40 px-2 py-1 rounded backdrop-blur-sm border border-white/10">{playing ? 'PAUSED' : 'PLAYING'}</span>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Badge color={pct >= 95 ? 'green' : 'blue'}>{Math.round(pct)}% complete</Badge>
-          <Badge color="slate">{Math.round(totalWatch / 60)}min watched</Badge>
+        <div className="flex flex-wrap items-center gap-3">
+          <Badge color={pct >= 95 ? 'success' : 'primary'} className="text-sm px-3 py-1">{Math.round(pct)}% Completed</Badge>
+          <Badge color="slate" className="text-sm px-3 py-1">{Math.round(totalWatch / 60)}m Total Watched</Badge>
         </div>
-        {lecture.description && <p className="text-sm text-slate-600">{lecture.description}</p>}
-        <div className="flex justify-end">
-          <Button variant="ghost" onClick={onClose}>Close</Button>
+        {lecture.description && (
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+            <p className="text-sm text-slate-700 leading-relaxed">{lecture.description}</p>
+          </div>
+        )}
+        <div className="flex justify-end pt-2">
+          <Button variant="secondary" onClick={onClose}>Close Player</Button>
         </div>
       </div>
     </Modal>

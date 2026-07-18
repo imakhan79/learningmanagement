@@ -78,33 +78,33 @@ export default function ExamsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <Award size={24} className="text-indigo-600" />
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2 tracking-tight">
+            <Award size={28} className="text-primary-600 drop-shadow-sm" />
             Exams & Quizzes
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-slate-500 font-medium">
             {role === 'student' ? 'Your available assessments and history' : 'Create and manage assessments'}
           </p>
         </div>
         {role !== 'student' && (
-          <Button onClick={() => { setEditing(null); setShowForm(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md">
+          <Button variant="gradient" onClick={() => { setEditing(null); setShowForm(true); }}>
             <Plus size={16} /> New Assessment
           </Button>
         )}
       </div>
 
       {exams.length === 0 ? (
-        <Card>
+        <Card className="py-4">
           <EmptyState 
-            icon={<ScrollText size={32} className="text-indigo-400" />} 
+            icon={<ScrollText size={32} className="text-primary-400" />} 
             title="No assessments" 
             subtitle={role === 'student' ? 'No exams available for your enrolled courses' : 'Create your first exam or quiz'} 
           />
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {exams.map((e) => {
             const isQuiz = e.type === 'quiz';
             const isStudent = role === 'student';
@@ -114,61 +114,63 @@ export default function ExamsPage() {
             const passed = pct >= (e.pass_marks || 50);
 
             return (
-              <Card key={e.id} className={`p-5 flex flex-col hover:shadow-lg transition-shadow border-t-4 ${isQuiz ? 'border-t-purple-400' : 'border-t-indigo-500'}`}>
-                <div className="flex items-start justify-between gap-2 mb-3">
+              <div key={e.id} className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex flex-col card-hover relative overflow-hidden group">
+                <div className={`absolute top-0 left-0 right-0 h-1.5 ${isQuiz ? 'bg-gradient-to-r from-violet-400 to-fuchsia-500' : 'bg-gradient-to-r from-blue-500 to-cyan-500'}`} />
+                <div className="flex items-start justify-between gap-3 mb-4 mt-2">
                   <div className="flex items-center gap-2">
-                    <Badge color={isQuiz ? 'purple' : 'indigo'}>{e.type?.toUpperCase() || 'EXAM'}</Badge>
-                    <Badge color={e.status === 'published' ? 'green' : e.status === 'closed' ? 'slate' : 'amber'}>{e.status}</Badge>
+                    <Badge color={isQuiz ? 'purple' : 'blue'}>{e.type?.toUpperCase() || 'EXAM'}</Badge>
+                    <Badge color={e.status === 'published' ? 'success' : e.status === 'closed' ? 'slate' : 'warning'}>{e.status}</Badge>
                   </div>
                   {isStudent && completed && (
-                    <Badge color={passed ? 'green' : 'red'}>{passed ? 'PASS' : 'FAIL'}</Badge>
+                    <Badge color={passed ? 'success' : 'danger'} className="shadow-sm">{passed ? 'PASSED' : 'FAILED'}</Badge>
                   )}
                 </div>
                 
-                <h3 className="text-lg font-bold text-slate-800 line-clamp-1 mb-1">{e.title}</h3>
-                {e.course && <p className="text-xs font-medium text-slate-500 mb-2 truncate">{e.course.title}</p>}
+                <h3 className="text-xl font-bold text-slate-800 line-clamp-1 mb-1 group-hover:text-primary-600 transition-colors tracking-tight">{e.title}</h3>
+                {e.course && <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 truncate">{e.course.title}</p>}
                 
-                <p className="text-sm text-slate-600 mb-4 line-clamp-2 flex-grow">{e.description || 'No description provided.'}</p>
+                <p className="text-sm text-slate-500 mb-6 line-clamp-2 flex-grow leading-relaxed">{e.description || 'No description provided.'}</p>
                 
-                <div className="flex items-center gap-4 text-xs font-medium text-slate-500 mb-4 bg-slate-50 p-2 rounded-lg">
-                  <span className="flex items-center gap-1"><Clock size={14} className="text-indigo-400" /> {e.duration_minutes}m</span>
-                  <span className="flex items-center gap-1"><FileText size={14} className="text-indigo-400" /> {e.questionCount || 0} Qs</span>
-                  <span className="flex items-center gap-1"><CheckCircle2 size={14} className="text-emerald-500" /> {e.pass_marks}%</span>
+                <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-slate-500 mb-6 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <span className="flex items-center gap-1.5"><Clock size={14} className="text-slate-400" /> {e.duration_minutes}m</span>
+                  <span className="flex items-center gap-1.5"><FileText size={14} className="text-slate-400" /> {e.questionCount || 0} Qs</span>
+                  <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-emerald-500" /> {e.pass_marks}% Pass</span>
                 </div>
 
-                <div className="pt-3 border-t border-slate-100 mt-auto flex flex-wrap gap-2">
+                <div className="pt-4 border-t border-slate-100 mt-auto flex flex-wrap gap-3">
                   {isStudent ? (
                     completed ? (
-                      <Button size="sm" variant="outline" className="w-full justify-between border-slate-200" onClick={() => viewAttemptResult(e.id)}>
+                      <button className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all font-bold text-sm ${passed ? 'border-emerald-100 bg-emerald-50 text-emerald-700 hover:border-emerald-200 hover:bg-emerald-100/50' : 'border-rose-100 bg-rose-50 text-rose-700 hover:border-rose-200 hover:bg-rose-100/50'}`} onClick={() => viewAttemptResult(e.id)}>
                         <span className="flex items-center gap-2">
-                          <Award size={14} className={passed ? 'text-emerald-500' : 'text-rose-500'} /> 
+                          <Award size={16} className={passed ? 'text-emerald-500' : 'text-rose-500'} /> 
                           Score: {attempt.score}/{attempt.total_marks}
                         </span>
-                        <span className="font-bold">{pct}%</span>
-                      </Button>
+                        <span className="text-base">{pct}%</span>
+                      </button>
                     ) : (
                       <Button 
-                        size="sm" 
-                        className={`w-full ${e.status !== 'published' ? 'opacity-50' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                        size="md" 
+                        variant="gradient"
+                        className={`w-full ${e.status !== 'published' ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
                         onClick={() => setTaking(e)} 
                         disabled={e.status !== 'published'}
                       >
                         {attempt ? (
-                          <><Activity size={14} className="mr-2" /> Resume {isQuiz ? 'Quiz' : 'Exam'}</>
+                          <><Activity size={16} className="mr-1" /> Resume {isQuiz ? 'Quiz' : 'Exam'}</>
                         ) : (
-                          <><Play size={14} className="mr-2" /> Start {isQuiz ? 'Quiz' : 'Exam'}</>
+                          <><Play size={16} className="mr-1 fill-white" /> Start {isQuiz ? 'Quiz' : 'Exam'}</>
                         )}
                       </Button>
                     )
                   ) : (
                     <div className="flex gap-2 w-full">
-                      <Button size="sm" variant="ghost" className="flex-1" onClick={() => { setEditing(e); setShowForm(true); }}>
-                        <Settings size={14} />
+                      <Button size="sm" variant="secondary" className="flex-1" onClick={() => { setEditing(e); setShowForm(true); }}>
+                        <Settings size={14} /> Edit
                       </Button>
-                      <Button size="sm" variant="outline" className="flex-1 border-indigo-200 text-indigo-700 hover:bg-indigo-50" onClick={() => setManaging(e)}>
-                        <FileText size={14} />
+                      <Button size="sm" variant="primary" className="flex-1 bg-primary-50 text-primary-700 hover:bg-primary-100" onClick={() => setManaging(e)}>
+                        <FileText size={14} /> Setup
                       </Button>
-                      <Button size="sm" variant="ghost" className="flex-1" onClick={async () => {
+                      <Button size="sm" variant="ghost" className="flex-1 text-slate-500 hover:text-slate-800" onClick={async () => {
                         const next = e.status === 'draft' ? 'published' : e.status === 'published' ? 'closed' : 'draft';
                         await supabase.from('exams').update({ status: next }).eq('id', e.id); 
                         load();
@@ -178,7 +180,7 @@ export default function ExamsPage() {
                     </div>
                   )}
                 </div>
-              </Card>
+              </div>
             );
           })}
         </div>
@@ -224,45 +226,68 @@ function ExamForm({ exam, courses, onClose, onSaved }: { exam: Exam | null; cour
   };
 
   return (
-    <Modal open onClose={onClose} title={exam ? 'Edit Assessment' : 'New Assessment'} size="lg">
-      <div className="space-y-5">
-        <div className="grid grid-cols-2 gap-4">
-          <Input label="Title" value={title} onChange={setTitle} placeholder="e.g. Midterm Exam" required />
-          <Select label="Type" value={type} onChange={setType} options={[{ value: 'exam', label: 'Formal Exam' }, { value: 'quiz', label: 'Practice Quiz' }]} />
+    <Modal open onClose={onClose} title={exam ? 'Edit Assessment' : 'New Assessment'} maxW="max-w-2xl">
+      <div className="space-y-6 p-6 pt-2">
+        <div className="grid grid-cols-2 gap-5">
+          <div>
+            <label className="label">Assessment Title</label>
+            <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Midterm Exam" required />
+          </div>
+          <div>
+            <label className="label">Type</label>
+            <Select value={type} onChange={e => setType(e.target.value)}>
+              <option value="exam">Formal Exam</option>
+              <option value="quiz">Practice Quiz</option>
+            </Select>
+          </div>
         </div>
         
-        <Select label="Course" value={courseId} onChange={setCourseId} options={courses.map((c) => ({ value: c.id, label: c.title }))} />
-        
-        <Textarea label="Description / Instructions" value={description} onChange={setDescription} rows={3} placeholder="Instructions for students..." />
-        
-        <div className="grid grid-cols-2 gap-4">
-          <Input label="Duration (minutes)" value={duration} onChange={setDuration} type="number" />
-          <Input label="Passing Score (%)" value={passMarks} onChange={setPassMarks} type="number" />
+        <div>
+          <label className="label">Associated Course</label>
+          <Select value={courseId} onChange={e => setCourseId(e.target.value)}>
+            {courses.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+          </Select>
         </div>
         
-        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label className="flex items-center gap-3 text-sm font-medium text-slate-700 cursor-pointer">
-            <input type="checkbox" checked={shuffleQ} onChange={(e) => setShuffleQ(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
-            <Shuffle size={16} className="text-slate-400" /> Randomise Question Order
+        <div>
+          <label className="label">Description / Instructions</label>
+          <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="Instructions for students..." />
+        </div>
+        
+        <div className="grid grid-cols-2 gap-5">
+          <div>
+            <label className="label">Duration (minutes)</label>
+            <Input value={duration} onChange={e => setDuration(e.target.value)} type="number" />
+          </div>
+          <div>
+            <label className="label">Passing Score (%)</label>
+            <Input value={passMarks} onChange={e => setPassMarks(e.target.value)} type="number" />
+          </div>
+        </div>
+        
+        <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4 shadow-inner-soft">
+          <label className="flex items-center gap-3 text-sm font-bold text-slate-700 cursor-pointer group">
+            <input type="checkbox" checked={shuffleQ} onChange={(e) => setShuffleQ(e.target.checked)} className="w-5 h-5 rounded border-slate-300 text-primary-600 focus:ring-primary-500" />
+            <Shuffle size={16} className="text-slate-400 group-hover:text-primary-500 transition-colors" /> Randomise Questions
           </label>
-          <label className="flex items-center gap-3 text-sm font-medium text-slate-700 cursor-pointer">
-            <input type="checkbox" checked={shuffleO} onChange={(e) => setShuffleO(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
-            <Shuffle size={16} className="text-slate-400" /> Randomise Options
+          <label className="flex items-center gap-3 text-sm font-bold text-slate-700 cursor-pointer group">
+            <input type="checkbox" checked={shuffleO} onChange={(e) => setShuffleO(e.target.checked)} className="w-5 h-5 rounded border-slate-300 text-primary-600 focus:ring-primary-500" />
+            <Shuffle size={16} className="text-slate-400 group-hover:text-primary-500 transition-colors" /> Randomise Options
           </label>
-          <label className="flex items-center gap-3 text-sm font-medium text-slate-700 cursor-pointer">
-            <input type="checkbox" checked={allowResume} onChange={(e) => setAllowResume(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
-            <Activity size={16} className="text-slate-400" /> Allow Resume
+          <label className="flex items-center gap-3 text-sm font-bold text-slate-700 cursor-pointer group">
+            <input type="checkbox" checked={allowResume} onChange={(e) => setAllowResume(e.target.checked)} className="w-5 h-5 rounded border-slate-300 text-primary-600 focus:ring-primary-500" />
+            <Activity size={16} className="text-slate-400 group-hover:text-primary-500 transition-colors" /> Allow Resume
           </label>
-          <label className="flex items-center gap-3 text-sm font-medium text-slate-700 cursor-pointer">
-            <input type="checkbox" checked={autoEval} onChange={(e) => setAutoEval(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
-            <CheckCircle2 size={16} className="text-slate-400" /> Auto Evaluate
+          <label className="flex items-center gap-3 text-sm font-bold text-slate-700 cursor-pointer group">
+            <input type="checkbox" checked={autoEval} onChange={(e) => setAutoEval(e.target.checked)} className="w-5 h-5 rounded border-slate-300 text-primary-600 focus:ring-primary-500" />
+            <CheckCircle2 size={16} className="text-slate-400 group-hover:text-primary-500 transition-colors" /> Auto Evaluate
           </label>
         </div>
         
-        <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+        <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={saving || !title || !courseId} className="bg-indigo-600 hover:bg-indigo-700">
-            {saving ? 'Saving…' : 'Save Assessment'}
+          <Button variant="gradient" onClick={save} disabled={saving || !title || !courseId}>
+            {saving ? 'Saving...' : 'Save Assessment'}
           </Button>
         </div>
       </div>
@@ -281,9 +306,6 @@ function ManageQuestions({ exam, onClose, onDone }: { exam: Exam; onClose: () =>
   useEffect(() => {
     (async () => {
       let qb = supabase.from('question_bank').select('*').eq('status', 'approved').order('created_at', { ascending: false });
-      // If we want professors to only see their own approved questions:
-      // if (profile?.role === 'professor') qb = qb.eq('created_by', profile.id);
-      
       const { data: qs } = await qb;
       const { data: eq } = await supabase.from('exam_questions').select('question_id').eq('exam_id', exam.id);
       
@@ -298,8 +320,6 @@ function ManageQuestions({ exam, onClose, onDone }: { exam: Exam; onClose: () =>
       await supabase.from('exam_questions').delete().eq('exam_id', exam.id).eq('question_id', qid);
       setAssigned((s) => { const n = new Set(s); n.delete(qid); return n; });
     } else {
-      // Find question to get max marks (assuming order_index is handled by DB defaults or we don't care)
-      const qmarks = questions.find((q) => q.id === qid)?.marks || 1;
       await supabase.from('exam_questions').insert({ exam_id: exam.id, question_id: qid, order_index: assigned.size });
       setAssigned((s) => new Set(s).add(qid));
     }
@@ -309,60 +329,62 @@ function ManageQuestions({ exam, onClose, onDone }: { exam: Exam; onClose: () =>
   const totalMarks = Array.from(assigned).reduce((acc, id) => acc + (questions.find(q => q.id === id)?.marks || 0), 0);
 
   return (
-    <Modal open onClose={onClose} title={`Manage Questions — ${exam.title}`} size="xl">
-      {loading ? <div className="p-8 flex justify-center"><Spinner /></div> : (
-        <div className="flex flex-col h-[70vh]">
-          <div className="flex items-center gap-4 mb-4 bg-indigo-50 p-3 rounded-lg border border-indigo-100">
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-indigo-900">{assigned.size} Questions Selected</p>
-              <p className="text-xs text-indigo-700">Total: {totalMarks} Marks</p>
+    <Modal open onClose={onClose} title={`Manage Questions — ${exam.title}`} maxW="max-w-4xl">
+      {loading ? <div className="p-12 flex justify-center"><Spinner /></div> : (
+        <div className="flex flex-col h-[75vh] p-6 pt-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-inner-soft">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-primary-100 text-primary-600 flex items-center justify-center font-black text-xl shadow-sm">
+                {assigned.size}
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-800 tracking-tight">Questions Selected</p>
+                <p className="text-xs font-bold text-primary-600 uppercase tracking-widest">{totalMarks} Total Marks</p>
+              </div>
             </div>
-            <Input value={search} onChange={setSearch} placeholder="Search question bank..." className="w-64 bg-white" />
+            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search question bank..." className="sm:w-72 bg-white shadow-sm" />
           </div>
           
-          <div className="flex-1 overflow-y-auto space-y-2 border border-slate-200 rounded-lg p-2 bg-slate-50">
+          <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
             {filtered.map((q) => {
               const isAssigned = assigned.has(q.id);
               return (
                 <div 
                   key={q.id} 
                   onClick={() => toggle(q.id)}
-                  className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-colors border ${
+                  className={`flex items-start gap-4 p-4 rounded-2xl cursor-pointer transition-all border-2 group ${
                     isAssigned 
-                      ? 'bg-indigo-50/50 border-indigo-200 shadow-sm' 
-                      : 'bg-white border-slate-200 hover:border-indigo-300'
+                      ? 'bg-primary-50/50 border-primary-200 shadow-sm' 
+                      : 'bg-white border-transparent hover:border-slate-200 hover:shadow-sm'
                   }`}
                 >
-                  <div className="mt-0.5">
-                    <input 
-                      type="checkbox" 
-                      checked={isAssigned} 
-                      onChange={() => {}} // Handled by div click
-                      className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer pointer-events-none" 
-                    />
+                  <div className="mt-1">
+                    <div className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${isAssigned ? 'bg-primary-500 border-primary-500 text-white' : 'border-slate-300 text-transparent group-hover:border-primary-400'}`}>
+                      <CheckCircle2 size={16} className={isAssigned ? 'opacity-100' : 'opacity-0'} />
+                    </div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <Badge color={q.difficulty === 'hard' ? 'red' : q.difficulty === 'medium' ? 'amber' : 'green'}>{q.difficulty}</Badge>
-                      <Badge color="slate">{q.type.replace('_', ' ')}</Badge>
-                      {q.category && <Badge color="violet">{q.category}</Badge>}
-                      <span className="text-xs font-semibold text-slate-500 ml-auto">{q.marks} Marks</span>
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <Badge color={q.difficulty === 'hard' ? 'danger' : q.difficulty === 'medium' ? 'warning' : 'success'}>{q.difficulty}</Badge>
+                      <Badge color="slate" className="bg-slate-100 text-slate-600">{q.type.replace('_', ' ')}</Badge>
+                      {q.category && <Badge color="purple" className="bg-purple-100 text-purple-700">{q.category}</Badge>}
+                      <span className="text-xs font-black text-slate-400 bg-slate-100 px-2 py-1 rounded-md ml-auto">{q.marks} Marks</span>
                     </div>
-                    <p className="text-sm font-medium text-slate-800 line-clamp-2">{q.question_text}</p>
+                    <p className="text-sm font-medium text-slate-700 line-clamp-3 leading-relaxed">{q.question_text}</p>
                   </div>
                 </div>
               );
             })}
             {filtered.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-10 text-slate-400">
-                <ScrollText size={32} className="mb-2 opacity-50" />
-                <p>No questions match your search.</p>
+              <div className="flex flex-col items-center justify-center py-16 text-slate-400 bg-slate-50 rounded-3xl border border-slate-100 border-dashed">
+                <ScrollText size={48} className="mb-4 opacity-20" />
+                <p className="font-medium text-slate-500">No questions match your search.</p>
               </div>
             )}
           </div>
-          <div className="flex justify-between items-center pt-4 mt-2">
-            <p className="text-xs text-slate-500">Changes are saved automatically.</p>
-            <Button onClick={onDone} className="bg-indigo-600 hover:bg-indigo-700">Done Editing</Button>
+          <div className="flex justify-between items-center pt-6 mt-4 border-t border-slate-100">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Save size={12} /> Auto-saved</p>
+            <Button variant="gradient" onClick={onDone} size="lg" className="px-8 shadow-md">Done Editing</Button>
           </div>
         </div>
       )}
@@ -516,34 +538,30 @@ function TakeExam({ exam, onClose }: { exam: Exam; onClose: () => void }) {
   };
 
   const handleExitAndSave = async () => {
-    // Basic saving is done when submitting, but here we can just update status if needed or just close.
-    // In a real app we'd periodically save answers to DB to prevent data loss.
     onClose();
   };
 
-  if (loading) return <Modal open onClose={() => {}} title={exam.title}><Spinner /></Modal>;
+  if (loading) return <Modal open onClose={() => {}} title={exam.title} maxW="max-w-md"><Spinner /></Modal>;
 
   if (result) {
     const passed = result.pct >= exam.pass_marks;
     return (
-      <Modal open onClose={onClose} title="Assessment Complete" size="md">
-        <div className="text-center py-8">
-          <div className={`w-20 h-20 rounded-full mx-auto mb-6 flex items-center justify-center shadow-inner ${passed ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
-            <Award size={40} />
+      <Modal open onClose={onClose} title="Assessment Complete" maxW="max-w-md">
+        <div className="text-center py-10 px-6">
+          <div className={`w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center shadow-inner-soft border-4 ${passed ? 'bg-emerald-50 text-emerald-500 border-emerald-100' : 'bg-rose-50 text-rose-500 border-rose-100'}`}>
+            <Award size={48} />
           </div>
-          <h2 className="text-4xl font-extrabold text-slate-800 mb-2">{result.score} <span className="text-xl text-slate-400 font-medium">/ {result.total}</span></h2>
-          <p className="text-lg font-medium text-slate-600 mb-4">{Math.round(result.pct)}% Score</p>
+          <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-tighter">{result.score} <span className="text-2xl text-slate-400 font-bold">/ {result.total}</span></h2>
+          <p className="text-lg font-bold text-slate-500 mb-6 uppercase tracking-widest">{Math.round(result.pct)}% Score</p>
           
-          <div className="inline-block px-4 py-1.5 rounded-full font-bold text-sm tracking-wide mb-8 border" style={{
-            backgroundColor: passed ? '#d1fae5' : '#ffe4e6',
-            color: passed ? '#059669' : '#e11d48',
-            borderColor: passed ? '#a7f3d0' : '#fecdd3'
-          }}>
+          <div className={`inline-block px-6 py-2 rounded-full font-black text-sm tracking-widest mb-10 border-2 uppercase ${
+            passed ? 'bg-emerald-100/50 text-emerald-600 border-emerald-200' : 'bg-rose-100/50 text-rose-600 border-rose-200'
+          }`}>
             {passed ? 'PASSED' : 'FAILED'}
           </div>
           
-          <div className="flex flex-col gap-2">
-            <Button onClick={onClose} className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3">Return to Dashboard</Button>
+          <div className="flex flex-col gap-3">
+            <Button onClick={onClose} variant="gradient" className="w-full py-4 text-lg">Return to Dashboard</Button>
           </div>
         </div>
       </Modal>
@@ -552,48 +570,48 @@ function TakeExam({ exam, onClose }: { exam: Exam; onClose: () => void }) {
 
   const mins = Math.floor(timeLeft / 60);
   const secs = timeLeft % 60;
-  const isTimeLow = timeLeft < 300; // less than 5 mins
+  const isTimeLow = timeLeft < 300;
 
   const currentQ = questions[currentIndex];
-  const answeredCount = Object.keys(answers).filter(k => answers[k] !== undefined && answers[k] !== '').length;
+  const answeredCount = Object.keys(answers).filter(k => answers[k] !== undefined && answers[k] !== '' && (Array.isArray(answers[k]) ? answers[k].length > 0 : true)).length;
 
   return (
-    <Modal open onClose={() => {}} title={exam.title} size="xl">
-      <div className="flex flex-col h-[75vh] bg-slate-50 -m-6">
+    <Modal open onClose={() => {}} title={exam.title} maxW="max-w-6xl">
+      <div className="flex flex-col h-[85vh] bg-slate-50 -m-6 rounded-b-2xl overflow-hidden">
         {/* Header Bar */}
         <div className="px-6 py-4 bg-white border-b border-slate-200 flex items-center justify-between shadow-sm z-10">
-          <div className="flex items-center gap-4">
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-mono font-bold text-lg ${isTimeLow ? 'bg-rose-100 text-rose-700 animate-pulse' : 'bg-slate-100 text-slate-700'}`}>
-              <Clock size={18} /> 
+          <div className="flex items-center gap-6">
+            <div className={`flex items-center gap-2 px-4 py-2 rounded-xl font-mono font-black text-xl shadow-sm border ${isTimeLow ? 'bg-rose-50 text-rose-600 border-rose-200 animate-pulse' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
+              <Clock size={20} className={isTimeLow ? 'text-rose-500' : 'text-slate-400'} /> 
               {mins}:{secs.toString().padStart(2, '0')}
             </div>
-            <div className="h-8 w-px bg-slate-200 hidden sm:block"></div>
+            <div className="h-10 w-px bg-slate-200 hidden sm:block"></div>
             <div className="hidden sm:flex flex-col">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Progress</span>
-              <span className="text-sm font-bold text-slate-700">{answeredCount} of {questions.length} Answered</span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Progress</span>
+              <span className="text-sm font-black text-primary-600">{answeredCount} of {questions.length} Answered</span>
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={handleExitAndSave} disabled={submitting}>
-              <Save size={14} className="mr-2" /> Save & Pause
+          <div className="flex items-center gap-4">
+            <Button variant="outline" onClick={handleExitAndSave} disabled={submitting} className="font-bold border-slate-300 text-slate-600 hover:bg-slate-50">
+              <Save size={16} className="mr-2" /> Save & Pause
             </Button>
-            <Button onClick={() => {
+            <Button variant="gradient" onClick={() => {
               if (answeredCount < questions.length && !confirm("You haven't answered all questions. Submit anyway?")) return;
               submit();
-            }} disabled={submitting} className="bg-indigo-600 hover:bg-indigo-700">
+            }} disabled={submitting} className="px-6 font-bold shadow-md">
               {submitting ? 'Submitting...' : 'Submit Exam'}
             </Button>
           </div>
         </div>
 
         {/* Main Content Area */}
-        <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+        <div className="flex-1 overflow-hidden flex flex-col md:flex-row relative">
           
           {/* Question Navigator Sidebar */}
-          <div className="w-full md:w-64 bg-white border-r border-slate-200 p-4 overflow-y-auto">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Questions</h3>
-            <div className="grid grid-cols-5 md:grid-cols-4 gap-2">
+          <div className="w-full md:w-72 bg-white border-r border-slate-200 p-5 overflow-y-auto custom-scrollbar shadow-sm z-0">
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Question Navigator</h3>
+            <div className="grid grid-cols-5 md:grid-cols-4 gap-2.5">
               {questions.map((q, idx) => {
                 const isAnswered = answers[q.id] !== undefined && answers[q.id] !== '' && (Array.isArray(answers[q.id]) ? answers[q.id].length > 0 : true);
                 const isCurrent = currentIndex === idx;
@@ -602,12 +620,12 @@ function TakeExam({ exam, onClose }: { exam: Exam; onClose: () => void }) {
                   <button
                     key={q.id}
                     onClick={() => setCurrentIndex(idx)}
-                    className={`h-10 rounded-lg text-sm font-bold flex items-center justify-center border-2 transition-colors ${
+                    className={`h-11 rounded-xl text-sm font-black flex items-center justify-center border-2 transition-all ${
                       isCurrent 
-                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
+                        ? 'border-primary-500 bg-primary-50 text-primary-700 shadow-sm scale-105' 
                         : isAnswered 
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
-                          : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                          ? 'border-success-400 bg-success-50 text-success-700' 
+                          : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50'
                     }`}
                   >
                     {idx + 1}
@@ -618,30 +636,30 @@ function TakeExam({ exam, onClose }: { exam: Exam; onClose: () => void }) {
           </div>
 
           {/* Active Question Display */}
-          <div className="flex-1 p-6 overflow-y-auto bg-slate-50">
+          <div className="flex-1 p-8 overflow-y-auto custom-scrollbar">
             {currentQ && (
-              <div className="max-w-3xl mx-auto">
-                <div className="mb-6 flex items-center justify-between">
-                  <h2 className="text-xl font-bold text-slate-800">Question {currentIndex + 1}</h2>
-                  <Badge color="slate" className="text-sm px-3 py-1 bg-white shadow-sm border border-slate-200">{currentQ.examMarks} Marks</Badge>
+              <div className="max-w-4xl mx-auto flex flex-col min-h-full">
+                <div className="mb-6 flex items-center justify-between bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                  <h2 className="text-xl font-black text-slate-800 tracking-tight">Question {currentIndex + 1}</h2>
+                  <Badge color="primary" className="text-sm px-3 py-1 shadow-sm font-bold">{currentQ.examMarks} Marks</Badge>
                 </div>
                 
-                <Card className="p-6 mb-6 shadow-sm border-0 ring-1 ring-slate-200">
-                  <p className="text-lg text-slate-800 font-medium leading-relaxed mb-6">
+                <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 mb-6 flex-grow flex flex-col">
+                  <p className="text-xl text-slate-800 font-medium leading-relaxed mb-8">
                     {currentQ.question_text}
                   </p>
                   
-                  <div className="space-y-3">
+                  <div className="space-y-4 mt-auto">
                     {currentQ.type === 'mcq' && (currentQ.options || []).map((o, oi) => (
-                      <label key={oi} className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
-                        answers[currentQ.id] === oi ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'
+                      <label key={oi} className={`flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all group ${
+                        answers[currentQ.id] === oi ? 'border-primary-500 bg-primary-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-primary-200 hover:bg-slate-50'
                       }`}>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                          answers[currentQ.id] === oi ? 'border-indigo-600' : 'border-slate-300'
+                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                          answers[currentQ.id] === oi ? 'border-primary-600' : 'border-slate-300 group-hover:border-primary-400'
                         }`}>
-                          {answers[currentQ.id] === oi && <div className="w-2.5 h-2.5 rounded-full bg-indigo-600" />}
+                          {answers[currentQ.id] === oi && <div className="w-3 h-3 rounded-full bg-primary-600" />}
                         </div>
-                        <span className="text-base text-slate-700 font-medium">{o}</span>
+                        <span className="text-lg text-slate-700 font-medium">{o}</span>
                       </label>
                     ))}
                     
@@ -649,33 +667,33 @@ function TakeExam({ exam, onClose }: { exam: Exam; onClose: () => void }) {
                       const sel: number[] = answers[currentQ.id] || [];
                       const isSelected = sel.includes(oi);
                       return (
-                        <label key={oi} className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
-                          isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'
+                        <label key={oi} className={`flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all group ${
+                          isSelected ? 'border-primary-500 bg-primary-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-primary-200 hover:bg-slate-50'
                         }`}>
-                          <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${
-                            isSelected ? 'bg-indigo-600 text-white' : 'border-2 border-slate-300'
+                          <div className={`w-6 h-6 rounded flex items-center justify-center shrink-0 transition-colors ${
+                            isSelected ? 'bg-primary-600 border-primary-600 text-white' : 'border-2 border-slate-300 text-transparent group-hover:border-primary-400'
                           }`}>
-                            {isSelected && <CheckCircle2 size={14} />}
+                            <CheckCircle2 size={16} className={isSelected ? 'opacity-100' : 'opacity-0'} />
                           </div>
-                          <span className="text-base text-slate-700 font-medium">{o}</span>
+                          <span className="text-lg text-slate-700 font-medium">{o}</span>
                         </label>
                       );
                     })}
                     
                     {currentQ.type === 'true_false' && (
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-5">
                         {[{ v: 'true', l: 'True' }, { v: 'false', l: 'False' }].map((o) => {
                           const isSelected = answers[currentQ.id] === o.v;
                           return (
-                            <label key={o.v} className={`flex flex-col items-center justify-center gap-2 py-6 rounded-xl border-2 cursor-pointer transition-colors ${
-                              isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'
+                            <label key={o.v} className={`flex flex-col items-center justify-center gap-3 py-8 rounded-2xl border-2 cursor-pointer transition-all group ${
+                              isSelected ? 'border-primary-500 bg-primary-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-primary-200 hover:bg-slate-50'
                             }`}>
-                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                                isSelected ? 'border-indigo-600' : 'border-slate-300'
+                              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+                                isSelected ? 'border-primary-600' : 'border-slate-300 group-hover:border-primary-400'
                               }`}>
-                                {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-indigo-600" />}
+                                {isSelected && <div className="w-3 h-3 rounded-full bg-primary-600" />}
                               </div>
-                              <span className="text-lg font-bold text-slate-700">{o.l}</span>
+                              <span className="text-xl font-black text-slate-700 tracking-tight">{o.l}</span>
                             </label>
                           );
                         })}
@@ -687,7 +705,7 @@ function TakeExam({ exam, onClose }: { exam: Exam; onClose: () => void }) {
                         value={answers[currentQ.id] || ''} 
                         onChange={(val) => setAnswer(currentQ.id, val)} 
                         placeholder="Type your answer here..." 
-                        className="text-lg py-4 shadow-inner bg-slate-50"
+                        className="text-lg py-4 shadow-inner-soft bg-slate-50 rounded-2xl border-slate-200 focus:bg-white"
                       />
                     )}
                     
@@ -695,38 +713,40 @@ function TakeExam({ exam, onClose }: { exam: Exam; onClose: () => void }) {
                       <Textarea 
                         value={answers[currentQ.id] || ''} 
                         onChange={(val) => setAnswer(currentQ.id, val)} 
-                        rows={8} 
+                        rows={10} 
                         placeholder="Write your detailed response here..." 
-                        className="text-base leading-relaxed shadow-inner bg-slate-50"
+                        className="text-base leading-relaxed shadow-inner-soft bg-slate-50 rounded-2xl border-slate-200 focus:bg-white p-5"
                       />
                     )}
                   </div>
-                </Card>
+                </div>
 
                 {/* Next/Prev Buttons */}
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mt-auto">
                   <Button 
                     variant="outline" 
                     onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
                     disabled={currentIndex === 0}
-                    className="px-6 border-slate-300 text-slate-600"
+                    className="px-8 py-3 font-bold text-slate-600 border-slate-300 hover:bg-white shadow-sm"
                   >
                     Previous
                   </Button>
                   
                   {currentIndex < questions.length - 1 ? (
                     <Button 
+                      variant="primary"
                       onClick={() => setCurrentIndex(currentIndex + 1)}
-                      className="px-8 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                      className="px-10 py-3 font-bold shadow-md text-lg"
                     >
                       Next Question
                     </Button>
                   ) : (
                     <Button 
+                      variant="gradient"
                       onClick={() => submit()}
-                      className="px-8 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                      className="px-10 py-3 font-bold shadow-md text-lg"
                     >
-                      Finish & Submit
+                      Finish Exam
                     </Button>
                   )}
                 </div>
@@ -762,28 +782,32 @@ function ExamResult({ attempt, onClose }: { attempt: ExamAttempt & { exam?: Exam
   const pct = attempt.total_marks ? Math.round((attempt.score / attempt.total_marks) * 100) : 0;
 
   return (
-    <Modal open onClose={onClose} title={`Results: ${exam?.title || 'Exam'}`} size="2xl">
-      <div className="space-y-6">
+    <Modal open onClose={onClose} title={`Results: ${exam?.title || 'Exam'}`} maxW="max-w-4xl">
+      <div className="space-y-6 p-6 pt-2">
         
         {/* Score Header */}
-        <div className={`p-6 rounded-2xl flex flex-col md:flex-row items-center gap-6 ${passed ? 'bg-emerald-50 border border-emerald-200' : 'bg-rose-50 border border-rose-200'}`}>
-          <div className={`w-24 h-24 rounded-full flex flex-col items-center justify-center border-4 shadow-sm bg-white ${passed ? 'border-emerald-400 text-emerald-600' : 'border-rose-400 text-rose-600'}`}>
-            <span className="text-2xl font-black">{pct}%</span>
+        <div className={`p-8 rounded-3xl flex flex-col md:flex-row items-center gap-8 shadow-sm border ${passed ? 'bg-success-50 border-success-200' : 'bg-danger-50 border-danger-200'}`}>
+          <div className={`w-28 h-28 rounded-full flex flex-col items-center justify-center border-4 shadow-md bg-white shrink-0 ${passed ? 'border-success-400 text-success-600' : 'border-danger-400 text-danger-600'}`}>
+            <span className="text-3xl font-black">{pct}%</span>
           </div>
           <div className="flex-1 text-center md:text-left">
-            <h2 className="text-2xl font-bold text-slate-800 mb-1">{passed ? 'Congratulations, you passed!' : 'You did not pass this time.'}</h2>
-            <p className="text-slate-600 mb-4">You scored <span className="font-bold">{attempt.score}</span> out of <span className="font-bold">{attempt.total_marks}</span> points.</p>
+            <h2 className="text-3xl font-black text-slate-800 mb-2 tracking-tight">{passed ? 'Congratulations, you passed!' : 'You did not pass this time.'}</h2>
+            <p className="text-slate-600 text-lg mb-6">You scored <span className="font-black text-slate-800">{attempt.score}</span> out of <span className="font-black text-slate-800">{attempt.total_marks}</span> points.</p>
             
-            <div className="flex flex-wrap gap-4 justify-center md:justify-start text-sm font-medium text-slate-700">
-              <span className="flex items-center gap-1.5"><Clock size={16} className="text-slate-400" /> Time taken: {Math.floor((attempt.time_spent_seconds || 0) / 60)}m {(attempt.time_spent_seconds || 0) % 60}s</span>
-              <span className="flex items-center gap-1.5"><CheckCircle2 size={16} className="text-slate-400" /> Required: {exam?.pass_marks}%</span>
+            <div className="flex flex-wrap gap-4 justify-center md:justify-start">
+              <span className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-slate-200 shadow-sm text-sm font-bold text-slate-600">
+                <Clock size={16} className="text-primary-500" /> Time taken: {Math.floor((attempt.time_spent_seconds || 0) / 60)}m {(attempt.time_spent_seconds || 0) % 60}s
+              </span>
+              <span className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-slate-200 shadow-sm text-sm font-bold text-slate-600">
+                <CheckCircle2 size={16} className="text-success-500" /> Required: {exam?.pass_marks}%
+              </span>
             </div>
           </div>
         </div>
 
         {/* Detailed Review */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-bold text-slate-800">Detailed Review</h3>
+        <div className="space-y-5">
+          <h3 className="text-xl font-black text-slate-800 tracking-tight pl-2 border-l-4 border-primary-500">Detailed Review</h3>
           
           {responses.map((resp, i) => {
             const q = resp.question;
@@ -793,53 +817,53 @@ function ExamResult({ attempt, onClose }: { attempt: ExamAttempt & { exam?: Exam
             const needsGrading = q.type === 'essay' && resp.graded_at === null;
 
             return (
-              <Card key={resp.question_id} className={`p-5 border-l-4 ${
-                needsGrading ? 'border-l-amber-400' : 
-                isCorrect ? 'border-l-emerald-500' : 
-                'border-l-rose-500'
+              <div key={resp.question_id} className={`bg-white p-6 rounded-3xl border shadow-sm ${
+                needsGrading ? 'border-warning-200' : 
+                isCorrect ? 'border-success-200' : 
+                'border-danger-200'
               }`}>
-                <div className="flex items-start gap-4">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 font-bold text-white shadow-sm ${
-                    needsGrading ? 'bg-amber-400' :
-                    isCorrect ? 'bg-emerald-500' : 
-                    'bg-rose-500'
+                <div className="flex items-start gap-5">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-black text-lg text-white shadow-sm ${
+                    needsGrading ? 'bg-warning-500' :
+                    isCorrect ? 'bg-success-500' : 
+                    'bg-danger-500'
                   }`}>
                     {i + 1}
                   </div>
                   
-                  <div className="flex-1">
-                    <div className="flex justify-between items-start mb-2">
-                      <p className="text-base font-medium text-slate-800 leading-snug">{q.question_text}</p>
-                      <Badge color="slate" className="ml-4 shrink-0">{resp.marks_awarded || 0} / {q.marks} Pts</Badge>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
+                      <p className="text-lg font-bold text-slate-800 leading-snug">{q.question_text}</p>
+                      <Badge color="slate" className="shrink-0 bg-slate-100 text-slate-600 shadow-sm font-black whitespace-nowrap">{resp.marks_awarded || 0} / {q.marks} Pts</Badge>
                     </div>
                     
-                    <div className="mt-4 p-4 rounded-lg bg-slate-50 border border-slate-200">
-                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Your Answer</p>
+                    <div className="mt-5 p-5 rounded-2xl bg-slate-50 border border-slate-100 shadow-inner-soft">
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Your Answer</p>
                       
                       {q.type === 'mcq' && (
-                        <p className="text-sm font-medium text-slate-700">
-                          {q.options[resp.selected_option_ids?.[0]] || <span className="italic text-slate-400">No answer provided</span>}
+                        <p className="text-base font-bold text-slate-700">
+                          {resp.selected_option_ids?.[0] !== undefined ? q.options[resp.selected_option_ids[0]] : <span className="italic text-slate-400 font-medium">No answer provided</span>}
                         </p>
                       )}
                       {q.type === 'multiple_select' && (
-                        <ul className="list-disc list-inside text-sm font-medium text-slate-700">
+                        <ul className="list-disc list-inside space-y-1 text-base font-bold text-slate-700">
                           {(resp.selected_option_ids || []).map((idx: number) => (
                             <li key={idx}>{q.options[idx]}</li>
                           ))}
-                          {(!resp.selected_option_ids || resp.selected_option_ids.length === 0) && <span className="italic text-slate-400">No answer provided</span>}
+                          {(!resp.selected_option_ids || resp.selected_option_ids.length === 0) && <span className="italic text-slate-400 font-medium">No answer provided</span>}
                         </ul>
                       )}
                       {(q.type === 'short_answer' || q.type === 'essay' || q.type === 'true_false') && (
-                        <p className="text-sm font-medium text-slate-700 whitespace-pre-wrap">
+                        <p className="text-base font-medium text-slate-700 whitespace-pre-wrap">
                           {resp.answer_text || <span className="italic text-slate-400">No answer provided</span>}
                         </p>
                       )}
                     </div>
                     
-                    {!isCorrect && q.correct_answer && q.type !== 'essay' && (
-                      <div className="mt-3 p-4 rounded-lg bg-emerald-50 border border-emerald-100">
-                        <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1">Correct Answer</p>
-                        <p className="text-sm font-medium text-emerald-800">
+                    {!isCorrect && q.correct_answer !== null && q.correct_answer !== undefined && q.type !== 'essay' && (
+                      <div className="mt-4 p-5 rounded-2xl bg-success-50 border border-success-100">
+                        <p className="text-xs font-black text-success-600 uppercase tracking-widest mb-2">Correct Answer</p>
+                        <p className="text-base font-bold text-success-800">
                           {q.type === 'mcq' ? q.options[q.correct_answer[0]] : 
                            q.type === 'true_false' ? (q.correct_answer ? 'True' : 'False') :
                            q.correct_answer}
@@ -848,27 +872,27 @@ function ExamResult({ attempt, onClose }: { attempt: ExamAttempt & { exam?: Exam
                     )}
                     
                     {q.explanation && (
-                      <div className="mt-3 flex gap-2 text-sm text-slate-600 bg-sky-50 p-3 rounded-lg border border-sky-100">
-                        <AlertCircle size={16} className="text-sky-500 shrink-0 mt-0.5" />
+                      <div className="mt-4 flex items-start gap-3 text-sm font-medium text-slate-700 bg-primary-50 p-4 rounded-2xl border border-primary-100">
+                        <AlertCircle size={18} className="text-primary-600 shrink-0 mt-0.5" />
                         <p>{q.explanation}</p>
                       </div>
                     )}
                     
                     {needsGrading && (
-                      <div className="mt-3 flex gap-2 text-sm text-amber-700 bg-amber-50 p-3 rounded-lg border border-amber-200 font-medium">
-                        <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                      <div className="mt-4 flex items-start gap-3 text-sm font-bold text-warning-800 bg-warning-50 p-4 rounded-2xl border border-warning-200">
+                        <AlertTriangle size={18} className="text-warning-600 shrink-0 mt-0.5" />
                         <p>This essay response is pending manual grading by your professor.</p>
                       </div>
                     )}
                   </div>
                 </div>
-              </Card>
+              </div>
             );
           })}
         </div>
         
-        <div className="pt-4 border-t border-slate-200 flex justify-end">
-          <Button onClick={onClose}>Close Review</Button>
+        <div className="pt-6 border-t border-slate-100 flex justify-end">
+          <Button variant="secondary" onClick={onClose} size="lg">Close Review</Button>
         </div>
       </div>
     </Modal>

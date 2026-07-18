@@ -44,6 +44,83 @@ import { Spinner, Badge, formatDateTime, formatDuration } from '../components/ui
 type Tab = 'upcoming' | 'past';
 
 // ─────────────────────────────────────────
+// Meeting Provider Registry
+// Add new providers here — UI auto-updates
+// ─────────────────────────────────────────
+const MEETING_PROVIDERS = [
+  {
+    id: 'free',
+    name: 'Jitsi Meet',
+    logo: '🟦',
+    badge: 'Free',
+    badgeBg: '#dbeafe',
+    badgeColor: '#1d4ed8',
+    brandColor: '#3b82f6',
+    bgColor: '#eff6ff',
+    shortDesc: 'Open-source, browser-based. No account required.',
+    infoMessage: 'A unique Jitsi Meet room will be auto-generated for this session. No account required.',
+    authenticationRequired: false,
+    meetingCreationType: 'auto_jitsi',
+  },
+  {
+    id: 'google_meet',
+    name: 'Google Meet',
+    logo: '🟢',
+    badge: 'OAuth',
+    badgeBg: '#dcfce7',
+    badgeColor: '#15803d',
+    brandColor: '#16a34a',
+    bgColor: '#f0fdf4',
+    shortDesc: 'Seamless Google Workspace integration.',
+    infoMessage: 'Google account authentication is required. A Google Meet link will be created automatically.',
+    authenticationRequired: true,
+    meetingCreationType: 'oauth_google',
+  },
+  {
+    id: 'zoom',
+    name: 'Zoom',
+    logo: '🔵',
+    badge: 'Premium',
+    badgeBg: '#dbeafe',
+    badgeColor: '#1e40af',
+    brandColor: '#2563eb',
+    bgColor: '#eff6ff',
+    shortDesc: 'Industry-standard video conferencing.',
+    infoMessage: 'Connect your Zoom account to automatically generate a Zoom meeting.',
+    authenticationRequired: true,
+    meetingCreationType: 'oauth_zoom',
+  },
+  {
+    id: 'teams',
+    name: 'Microsoft Teams',
+    logo: '🟣',
+    badge: 'Enterprise',
+    badgeBg: '#ede9fe',
+    badgeColor: '#7c3aed',
+    brandColor: '#7c3aed',
+    bgColor: '#f5f3ff',
+    shortDesc: 'Microsoft 365 enterprise collaboration.',
+    infoMessage: 'Microsoft 365 authentication is required to create a Teams meeting.',
+    authenticationRequired: true,
+    meetingCreationType: 'oauth_teams',
+  },
+  {
+    id: 'paid',
+    name: 'Custom / Paid Provider',
+    logo: '💳',
+    badge: 'Custom',
+    badgeBg: '#fef3c7',
+    badgeColor: '#b45309',
+    brandColor: '#d97706',
+    bgColor: '#fffbeb',
+    shortDesc: 'Use your own configured meeting platform.',
+    infoMessage: 'Choose your configured meeting provider from your organization\'s integrations. Paste the join URL below.',
+    authenticationRequired: false,
+    meetingCreationType: 'manual_url',
+  },
+] as const;
+
+// ─────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────
 function courseTitle(s: any): string {
@@ -102,13 +179,21 @@ export default function LivePage() {
 
   // ── Create modal ──
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    title: string;
+    description: string;
+    course_id: string;
+    start_at: string;
+    end_at: string;
+    provider: string;
+    join_url: string;
+  }>({
     title: '',
     description: '',
     course_id: '',
     start_at: '',
     end_at: '',
-    provider: 'free' as 'free' | 'paid',
+    provider: 'free',
     join_url: '',
   });
   const [saving, setSaving] = useState(false);
@@ -223,8 +308,10 @@ export default function LivePage() {
     setFormError('');
     const { error: e } = await createLiveSession({
       ...form,
+      // Map all non-free, non-paid provider IDs to 'paid' for DB storage
+      provider: form.provider === 'free' ? 'free' : 'paid',
       instructor_id: profile!.id,
-      join_url: form.provider === 'paid' ? form.join_url : undefined,
+      join_url: form.provider === 'free' ? undefined : (form.join_url || undefined),
     });
     setSaving(false);
     if (e) { setFormError(e.message); return; }
@@ -300,50 +387,51 @@ export default function LivePage() {
     setReminderSent(true);
   }
 
-  if (loading) return <Spinner />;
+  if (loading) return <div className="p-12 flex justify-center"><Spinner /></div>;
 
   const status = detailSession ? getStatus(detailSession) : null;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="space-y-8">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-lg shadow-rose-500/30">
-            <Video size={22} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800">Live Sessions</h1>
-            <p className="text-sm text-slate-500">Real-time virtual classes and webinars</p>
-          </div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2 tracking-tight">
+            <Video size={28} className="text-rose-500 drop-shadow-sm" />
+            Live Sessions
+          </h1>
+          <p className="text-slate-500 font-medium">Real-time virtual classes and webinars</p>
         </div>
         {canManage && (
           <button
             id="btn-schedule-session"
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-rose-500 to-pink-600 text-white rounded-xl font-medium hover:opacity-90 transition-opacity shadow-md shadow-rose-500/25"
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-rose-500 to-pink-600 text-white rounded-xl font-bold hover:opacity-90 transition-opacity shadow-lg shadow-rose-500/30"
           >
-            <Plus size={16} /> Schedule Session
+            <Plus size={18} /> Schedule Session
           </button>
         )}
       </div>
 
       {/* ── Active Session Banner ── */}
       {activeSession && (
-        <div className="flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg">
-          <div className="flex items-center gap-3">
-            <Radio size={20} className="animate-pulse" />
+        <div className="flex items-center justify-between p-5 rounded-2xl bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-xl shadow-green-500/30 relative overflow-hidden">
+          <div className="absolute top-0 right-0 opacity-10 p-4"><Radio size={100} /></div>
+          <div className="flex items-center gap-4 relative z-10">
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+              <Radio size={20} className="animate-pulse" />
+            </div>
             <div>
-              <p className="font-semibold">You're in: {activeSession.title}</p>
-              <p className="text-sm opacity-80">
-                {realtimeCount} participant{realtimeCount !== 1 ? 's' : ''} online
+              <p className="font-black text-lg tracking-tight">You're in: {activeSession.title}</p>
+              <p className="text-sm font-medium opacity-80">
+                <span className="font-black">{realtimeCount}</span> participant{realtimeCount !== 1 ? 's' : ''} online
               </p>
             </div>
           </div>
           <button
             onClick={handleLeave}
-            className="flex items-center gap-2 px-4 py-2 bg-white text-green-700 rounded-xl font-medium text-sm hover:bg-green-50 transition-colors"
+            className="flex items-center gap-2 px-5 py-2.5 bg-white text-green-700 rounded-xl font-bold text-sm hover:bg-green-50 transition-colors shadow-sm relative z-10"
           >
             <X size={14} /> Leave Session
           </button>
@@ -351,16 +439,16 @@ export default function LivePage() {
       )}
 
       {/* ── Tab Bar ── */}
-      <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl w-fit">
+      <div className="flex items-center gap-2 p-1.5 bg-slate-100 rounded-2xl w-fit shadow-inner-soft">
         {(['upcoming', 'past'] as Tab[]).map((t) => (
           <button
             key={t}
             id={`tab-${t}`}
             onClick={() => setTab(t)}
-            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 capitalize ${
+            className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 capitalize ${
               tab === t
                 ? 'bg-white text-slate-800 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
             }`}
           >
             {t}
@@ -370,17 +458,29 @@ export default function LivePage() {
 
       {/* ── Sessions Grid ── */}
       {sessions.length === 0 ? (
-        <div className="text-center py-20 text-slate-400">
-          <Video size={48} className="mx-auto mb-4 opacity-20" />
-          <p className="text-lg font-semibold text-slate-500">No {tab} sessions</p>
-          <p className="text-sm mt-1">
-            {tab === 'upcoming'
-              ? 'Sessions you schedule or are enrolled in will appear here'
-              : 'Past sessions you attended or hosted will show here'}
-          </p>
+        <div className="py-24 text-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50 flex flex-col items-center justify-center gap-4">
+          <div className="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center">
+            <Video size={40} className="text-slate-300" />
+          </div>
+          <div>
+            <p className="text-xl font-black text-slate-600 tracking-tight">No {tab} sessions</p>
+            <p className="text-slate-400 font-medium mt-1">
+              {tab === 'upcoming'
+                ? 'Sessions you schedule or are enrolled in will appear here'
+                : 'Past sessions you attended or hosted will show here'}
+            </p>
+          </div>
+          {canManage && tab === 'upcoming' && (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="mt-2 flex items-center gap-2 px-6 py-3 bg-rose-500 text-white rounded-xl font-bold text-sm hover:bg-rose-600 transition-colors"
+            >
+              <Plus size={16} /> Schedule First Session
+            </button>
+          )}
         </div>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid gap-4">
           {sessions.map((s) => {
             const st = getStatus(s);
             const cfg = STATUS_CONFIG[st];
@@ -389,60 +489,63 @@ export default function LivePage() {
             return (
               <div
                 key={s.id}
-                className="bg-white border border-slate-200 rounded-2xl p-5 hover:shadow-md transition-all duration-200 cursor-pointer group"
+                className="bg-white border border-slate-100 rounded-3xl p-6 hover:shadow-md transition-all duration-200 cursor-pointer group shadow-sm relative overflow-hidden"
                 onClick={() => openDetail(s)}
               >
+                {st === 'live' && (
+                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green-400 to-emerald-500" />
+                )}
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                      <h2 className="text-base font-semibold text-slate-800 truncate">{s.title}</h2>
-                      <Badge color={cfg.color}>
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <h2 className="text-base font-black text-slate-800 tracking-tight truncate">{s.title}</h2>
+                      <Badge color={cfg.color} className="shadow-sm">
                         {cfg.dot && (
                           <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse mr-1" />
                         )}
                         {cfg.label}
                       </Badge>
-                      <Badge color={s.provider === 'free' ? 'slate' : 'purple'}>
+                      <Badge color={s.provider === 'free' ? 'slate' : 'purple'} className="shadow-sm">
                         {s.provider === 'free' ? '🆓 Jitsi' : '💳 Paid'}
                       </Badge>
                     </div>
                     {s.description && (
-                      <p className="text-sm text-slate-500 mb-2 line-clamp-1">{s.description}</p>
+                      <p className="text-sm text-slate-500 font-medium mb-3 line-clamp-1">{s.description}</p>
                     )}
-                    <div className="flex items-center gap-4 text-xs text-slate-400 flex-wrap">
+                    <div className="flex items-center gap-5 text-xs text-slate-400 font-bold flex-wrap">
                       {ct && (
-                        <span className="flex items-center gap-1">
+                        <span className="flex items-center gap-1.5">
                           <Users size={12} /> {ct}
                         </span>
                       )}
                       {name && (
-                        <span className="flex items-center gap-1">
+                        <span className="flex items-center gap-1.5">
                           <UserCheck size={12} /> {name}
                         </span>
                       )}
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1.5">
                         <Calendar size={12} /> {new Date(s.start_at).toLocaleDateString()}
                       </span>
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1.5">
                         <Clock size={12} />
                         {new Date(s.start_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         {s.end_at && ` – ${new Date(s.end_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-3 shrink-0">
                     {s.join_url && st !== 'ended' && (
                       <button
                         id={`btn-join-${s.id}`}
                         onClick={(e) => { e.stopPropagation(); handleJoin(s); }}
-                        className="flex items-center gap-1 px-3 py-2 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700 transition-colors"
+                        className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-colors shadow-sm"
                       >
                         <ExternalLink size={14} /> Join
                       </button>
                     )}
                     <ChevronRight
-                      size={18}
-                      className="text-slate-300 group-hover:text-slate-500 transition-colors"
+                      size={20}
+                      className="text-slate-200 group-hover:text-slate-400 transition-colors"
                     />
                   </div>
                 </div>
@@ -852,25 +955,84 @@ export default function LivePage() {
                   />
                 </div>
               </div>
+              {/* ── Video Conference Provider ── */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Provider</label>
+                <label className="block text-sm font-semibold text-slate-700 mb-3">
+                  Video Conference Provider
+                </label>
                 <div className="grid grid-cols-2 gap-3">
-                  {(['free', 'paid'] as const).map((p) => (
-                    <button
-                      key={p}
-                      id={`provider-${p}`}
-                      onClick={() => setForm({ ...form, provider: p })}
-                      className={`p-3 rounded-xl border-2 text-sm font-medium transition-colors ${
-                        form.provider === p
-                          ? 'border-rose-400 bg-rose-50 text-rose-700'
-                          : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                      }`}
-                    >
-                      {p === 'free' ? '🆓 Jitsi Meet (Free)' : '💳 Paid Provider'}
-                    </button>
-                  ))}
+                  {MEETING_PROVIDERS.map((p) => {
+                    const selected = form.provider === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        id={`provider-${p.id}`}
+                        type="button"
+                        onClick={() => setForm({ ...form, provider: p.id as 'free' | 'paid', join_url: '' })}
+                        className="relative text-left rounded-2xl border-2 p-4 transition-all duration-200 focus:outline-none group"
+                        style={{
+                          borderColor: selected ? p.brandColor : '#e2e8f0',
+                          backgroundColor: selected ? p.bgColor : '#fff',
+                          boxShadow: selected
+                            ? `0 0 0 3px ${p.brandColor}22`
+                            : '0 1px 3px rgba(0,0,0,0.06)',
+                          transform: selected ? 'scale(1.01)' : undefined,
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!selected) (e.currentTarget as HTMLElement).style.borderColor = p.brandColor + '88';
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!selected) (e.currentTarget as HTMLElement).style.borderColor = '#e2e8f0';
+                        }}
+                      >
+                        {/* Checkmark */}
+                        {selected && (
+                          <span
+                            className="absolute top-2.5 right-2.5 flex items-center justify-center w-5 h-5 rounded-full text-white text-xs font-bold"
+                            style={{ backgroundColor: p.brandColor }}
+                          >
+                            ✓
+                          </span>
+                        )}
+
+                        {/* Logo + Badge */}
+                        <div className="flex items-start gap-3 mb-2">
+                          <span className="text-2xl leading-none shrink-0">{p.logo}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-slate-800 leading-tight truncate">{p.name}</p>
+                            <span
+                              className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-semibold"
+                              style={{ backgroundColor: p.badgeBg, color: p.badgeColor }}
+                            >
+                              {p.badge}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Short description */}
+                        <p className="text-xs text-slate-400 leading-snug line-clamp-2">{p.shortDesc}</p>
+                      </button>
+                    );
+                  })}
                 </div>
+
+                {/* Dynamic Info Box */}
+                {(() => {
+                  const p = MEETING_PROVIDERS.find((x) => x.id === form.provider);
+                  if (!p) return null;
+                  return (
+                    <div
+                      className="mt-3 flex items-start gap-2.5 p-3 rounded-xl border text-sm"
+                      style={{ backgroundColor: p.bgColor, borderColor: p.brandColor + '44', color: p.brandColor }}
+                    >
+                      <span className="text-base leading-none shrink-0 mt-0.5">{p.logo}</span>
+                      <span className="leading-relaxed" style={{ color: '#374151' }}>{p.infoMessage}</span>
+                    </div>
+                  );
+                })()}
               </div>
+
+              {/* Join URL field — only for paid/custom */}
               {form.provider === 'paid' && (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Join URL (from provider)</label>
@@ -879,14 +1041,8 @@ export default function LivePage() {
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400"
                     value={form.join_url}
                     onChange={(e) => setForm({ ...form, join_url: e.target.value })}
-                    placeholder="https://zoom.us/j/..."
+                    placeholder="https://your-meeting-link..."
                   />
-                </div>
-              )}
-              {form.provider === 'free' && (
-                <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl text-blue-700 text-sm flex items-start gap-2">
-                  <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
-                  <span>A unique Jitsi Meet room will be auto-generated for this session. No account required.</span>
                 </div>
               )}
             </div>

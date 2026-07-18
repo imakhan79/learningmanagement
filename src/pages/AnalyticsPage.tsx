@@ -24,16 +24,16 @@ export default function AnalyticsPage() {
     })();
   }, [role, profile?.id]);
 
-  if (loading) return <Spinner />;
+  if (loading) return <div className="p-12 flex justify-center"><Spinner /></div>;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-          <Activity size={24} className="text-indigo-600" />
+    <div className="space-y-8">
+      <div className="flex flex-col gap-1 mb-8">
+        <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2 tracking-tight">
+          <Activity size={28} className="text-primary-600 drop-shadow-sm" />
           Analytics Engine
         </h1>
-        <p className="text-sm text-slate-500 mt-1">
+        <p className="text-slate-500 font-medium">
           {role === 'admin' ? 'Institution-wide metrics and KPIs' : 
            role === 'professor' ? 'Course performance and student engagement' : 
            'Your learning progress and performance insights'}
@@ -258,27 +258,31 @@ async function loadStudent(setData: (d: any) => void, studentId: string) {
 function AnalyticsView({ role, data }: { role: string; data: any }) {
   if (role === 'admin') {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <StatCard label="Active Students" value={data.activeStudents} icon={<Users size={18} />} color="indigo" />
-          <StatCard label="Active Profs" value={data.activeProfessors} icon={<ClipboardCheck size={18} />} color="sky" />
-          <StatCard label="Active Courses" value={data.activeCourses} icon={<BookOpen size={18} />} color="violet" />
-          <StatCard label="Completion Rate" value={`${data.completionRate}%`} icon={<Target size={18} />} color="emerald" />
-          <StatCard label="Success Rate" value={`${data.successRate}%`} icon={<Award size={18} />} color="amber" />
-          <StatCard label="Engagement" value={`${data.engagementScore}/100`} icon={<Activity size={18} />} color="rose" />
+      <div className="space-y-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-5">
+          <StatCard label="Active Students" value={data.activeStudents} icon={<Users size={20} />} color="indigo" />
+          <StatCard label="Active Profs" value={data.activeProfessors} icon={<ClipboardCheck size={20} />} color="sky" />
+          <StatCard label="Active Courses" value={data.activeCourses} icon={<BookOpen size={20} />} color="violet" />
+          <StatCard label="Completion Rate" value={`${data.completionRate}%`} icon={<Target size={20} />} color="emerald" />
+          <StatCard label="Success Rate" value={`${data.successRate}%`} icon={<Award size={20} />} color="amber" />
+          <StatCard label="Engagement" value={`${data.engagementScore}/100`} icon={<Activity size={20} />} color="rose" />
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <ChartCard title="Platform Growth (Users & Enrollments)">
-              <BarChart data={data.growthByMonth || []} color="#4f46e5" />
+              <div className="h-[300px] mt-4">
+                <BarChart data={data.growthByMonth || []} color="#4f46e5" />
+              </div>
             </ChartCard>
           </div>
           <div>
             <ChartCard title="Courses by Category">
-              <DonutChart segments={(data.catDist || []).map((d: any, i: number) => ({
-                label: d.label, value: d.value, color: ['#4f46e5', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'][i % 5]
-              }))} />
+              <div className="h-[300px] mt-4 flex items-center justify-center">
+                <DonutChart segments={(data.catDist || []).map((d: any, i: number) => ({
+                  label: d.label, value: d.value, color: ['#4f46e5', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'][i % 5]
+                }))} />
+              </div>
             </ChartCard>
           </div>
         </div>
@@ -288,8 +292,8 @@ function AnalyticsView({ role, data }: { role: string; data: any }) {
 
   if (role === 'professor') {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="space-y-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
           <StatCard label="Student Engagement" value={`${data.engagementScore}/100`} icon={<Activity size={20} />} color="rose" />
           <StatCard label="Avg Lec. Completion" value={`${data.avgLecCompletion}%`} icon={<CheckCircle size={20} />} color="emerald" />
           <StatCard label="Avg Watch Time" value={`${data.avgWatchMins}m`} icon={<Clock size={20} />} color="indigo" />
@@ -298,12 +302,16 @@ function AnalyticsView({ role, data }: { role: string; data: any }) {
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ChartCard title="Content Utilization (by Type)">
-            <DonutChart segments={(data.matByType || []).map((d: any, i: number) => ({
-              label: d.label.toUpperCase(), value: d.value, color: ['#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#3b82f6'][i % 5]
-            }))} />
+            <div className="h-[300px] mt-4 flex items-center justify-center">
+              <DonutChart segments={(data.matByType || []).map((d: any, i: number) => ({
+                label: d.label.toUpperCase(), value: d.value, color: ['#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#3b82f6'][i % 5]
+              }))} />
+            </div>
           </ChartCard>
           <ChartCard title="Lecture Upload Trends">
-            <LineChart data={data.lecByMonth || []} color="#8b5cf6" />
+            <div className="h-[300px] mt-4">
+              <LineChart data={data.lecByMonth || []} color="#8b5cf6" />
+            </div>
           </ChartCard>
         </div>
       </div>
@@ -312,42 +320,44 @@ function AnalyticsView({ role, data }: { role: string; data: any }) {
 
   // Student Role
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <StatCard label="Learning Hours" value={data.learningHours} icon={<Clock size={18} />} color="indigo" />
-        <StatCard label="Attendance" value={`${data.attendanceRate}%`} icon={<CheckCircle size={18} />} color="emerald" />
-        <StatCard label="Enrolled Courses" value={data.courseCount} icon={<BookOpen size={18} />} color="sky" />
-        <StatCard label="Completed" value={data.completedCourses} icon={<Target size={18} />} color="violet" />
-        <StatCard label="Avg Quiz Score" value={`${data.avgQuiz}%`} icon={<ClipboardCheck size={18} />} color="amber" />
-        <StatCard label="Avg Exam Score" value={`${data.avgExam}%`} icon={<Award size={18} />} color="rose" />
+    <div className="space-y-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-5">
+        <StatCard label="Learning Hours" value={data.learningHours} icon={<Clock size={20} />} color="indigo" />
+        <StatCard label="Attendance" value={`${data.attendanceRate}%`} icon={<CheckCircle size={20} />} color="emerald" />
+        <StatCard label="Enrolled Courses" value={data.courseCount} icon={<BookOpen size={20} />} color="sky" />
+        <StatCard label="Completed" value={data.completedCourses} icon={<Target size={20} />} color="violet" />
+        <StatCard label="Avg Quiz Score" value={`${data.avgQuiz}%`} icon={<ClipboardCheck size={20} />} color="amber" />
+        <StatCard label="Avg Exam Score" value={`${data.avgExam}%`} icon={<Award size={20} />} color="rose" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <ChartCard title="Progress Trends (Learning Hours)">
-            <LineChart data={data.progressTrends || []} color="#4f46e5" />
+            <div className="h-[300px] mt-4">
+              <LineChart data={data.progressTrends || []} color="#4f46e5" />
+            </div>
           </ChartCard>
         </div>
         <div>
           <ChartCard title="Areas for Improvement">
-            <div className="space-y-4">
+            <div className="space-y-5 mt-4">
               {(data.weakTopics || []).map((wt: any, idx: number) => (
-                <div key={idx} className="flex items-center gap-3">
+                <div key={idx} className="flex items-center gap-4 group">
                   <div className="flex-1">
-                    <div className="flex justify-between mb-1">
-                      <span className="text-sm font-medium text-slate-700">{wt.label}</span>
-                      <span className="text-xs font-bold text-rose-600">{wt.score}%</span>
+                    <div className="flex justify-between mb-2">
+                      <span className="text-sm font-bold text-slate-700 tracking-tight">{wt.label}</span>
+                      <span className="text-sm font-black text-rose-600">{wt.score}%</span>
                     </div>
-                    <div className="w-full bg-slate-100 rounded-full h-2">
-                      <div className="bg-rose-500 h-2 rounded-full" style={{ width: `${Math.max(wt.score, 5)}%` }}></div>
+                    <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden border border-slate-200">
+                      <div className="bg-gradient-to-r from-rose-400 to-rose-500 h-2.5 rounded-full shadow-inner transition-all duration-1000" style={{ width: `${Math.max(wt.score, 5)}%` }}></div>
                     </div>
                   </div>
                 </div>
               ))}
               {(!data.weakTopics || data.weakTopics.length === 0) && (
-                <div className="flex flex-col items-center justify-center py-8 text-slate-400">
-                  <AlertTriangle size={32} className="mb-2 opacity-50 text-emerald-500" />
-                  <p className="text-sm text-center">No weak topics identified yet.<br/>Keep taking quizzes!</p>
+                <div className="flex flex-col items-center justify-center py-10 text-slate-400 bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
+                  <AlertTriangle size={40} className="mb-3 opacity-30 text-emerald-500" />
+                  <p className="text-sm font-medium text-center">No weak topics identified yet.<br/>Keep taking quizzes!</p>
                 </div>
               )}
             </div>

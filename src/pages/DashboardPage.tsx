@@ -185,35 +185,39 @@ async function loadStudent(setData: (d: any) => void, studentId: string) {
 function AdminDashboard({ data }: { data: any }) {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-slate-800">Institution Overview</h1>
-        <p className="text-sm text-slate-500">Real-time KPIs and system health</p>
+      <div className="flex flex-col gap-1 mb-8">
+        <h1 className="text-2xl font-black text-slate-800 tracking-tight">Institution Overview</h1>
+        <p className="text-slate-500 font-medium">Real-time KPIs and system health monitoring</p>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Students" value={data.students} icon={<Users size={20} />} color="sky" />
-        <StatCard label="Professors" value={data.professors} icon={<GraduationCap size={20} />} color="emerald" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+        <StatCard label="Students" value={data.students} icon={<Users size={20} />} color="sky" trend="up" trendLabel="+12%" />
+        <StatCard label="Professors" value={data.professors} icon={<GraduationCap size={20} />} color="emerald" trend="up" trendLabel="+5%" />
         <StatCard label="Courses" value={data.courses} icon={<BookOpen size={20} />} color="violet" />
-        <StatCard label="Active Users" value={data.activeUsers} icon={<Users size={20} />} color="emerald" />
-        <StatCard label="System Load" value={`${data.systemLoad}%`} icon={<Activity size={20} />} color="amber" />
-        <StatCard label="Attendance" value={`${data.attendanceRate || 0}%`} icon={<Clock size={20} />} color="violet" />
-        <StatCard label="Revenue" value={`$${data.revenue}`} icon={<Award size={20} />} color="sky" />
-        <StatCard label="Pending Courses" value={data.pendingCourses} icon={<AlertTriangle size={20} />} color="amber" />
+        <StatCard label="Active Users" value={data.activeUsers} icon={<Activity size={20} />} color="amber" />
+        <StatCard label="System Load" value={`${data.systemLoad}%`} icon={<Target size={20} />} color="rose" />
+        <StatCard label="Attendance" value={`${data.attendanceRate || 0}%`} icon={<Clock size={20} />} color="sky" />
+        <StatCard label="Revenue" value={`$${(data.revenue || 0).toLocaleString()}`} icon={<Award size={20} />} color="emerald" trend="up" trendLabel="+18%" />
+        <StatCard label="Pending Courses" value={data.pendingCourses} icon={<AlertTriangle size={20} />} color="amber" trend="down" trendLabel="-2" />
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-6">
         <ChartCard title="Courses by Status">
-          <DonutChart
-            segments={[
-              { label: 'Published', value: data.courseStatus?.approved || 0, color: '#10b981' },
-              { label: 'Pending', value: data.courseStatus?.pending || 0, color: '#f59e0b' },
-              { label: 'Draft', value: data.courseStatus?.draft || 0, color: '#94a3b8' },
-            ]}
-          />
+          <div className="py-4">
+            <DonutChart
+              segments={[
+                { label: 'Published', value: data.courseStatus?.approved || 0, color: '#10b981' },
+                { label: 'Pending', value: data.courseStatus?.pending || 0, color: '#f59e0b' },
+                { label: 'Draft', value: data.courseStatus?.draft || 0, color: '#94a3b8' },
+              ]}
+            />
+          </div>
         </ChartCard>
         <ChartCard title="Courses by Category">
-          <BarChart data={data.categories || []} color="#8b5cf6" />
+          <div className="py-2">
+            <BarChart data={data.categories || []} color="#8b5cf6" />
+          </div>
         </ChartCard>
       </div>
-      <ChartCard title="Recent Alerts">
+      <ChartCard title="System Alerts">
         <AlertList alerts={data.alerts} />
       </ChartCard>
     </div>
@@ -223,28 +227,34 @@ function AdminDashboard({ data }: { data: any }) {
 function ProfessorDashboard({ data }: { data: any }) {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-slate-800">Professor Dashboard</h1>
-        <p className="text-sm text-slate-500">Your courses, engagement, and KPI achievement</p>
+      <div className="flex flex-col gap-1 mb-8">
+        <h1 className="text-2xl font-black text-slate-800 tracking-tight">Professor Dashboard</h1>
+        <p className="text-slate-500 font-medium">Your courses, engagement, and KPI achievement</p>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard label="My Courses" value={data.courses} icon={<BookOpen size={20} />} color="sky" />
         <StatCard label="Lectures" value={data.lectures} icon={<Clock size={20} />} color="emerald" />
-        <StatCard label="Enrolled Students" value={data.students} icon={<Users size={20} />} color="violet" />
-        <StatCard label="Avg Score" value={data.avgScore} icon={<Award size={20} />} color="amber" />
+        <StatCard label="Students" value={data.students} icon={<Users size={20} />} color="violet" trend="up" trendLabel="+8%" />
+        <StatCard label="Avg Score" value={`${data.avgScore}%`} icon={<Award size={20} />} color="amber" />
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard title="Materials by Type">
-          <BarChart data={data.materialsByType || []} color="#0ea5e9" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-6">
+        <ChartCard title="Materials Distribution">
+          <div className="py-2">
+            <BarChart data={data.materialsByType || []} color="#0ea5e9" />
+          </div>
         </ChartCard>
-        <ChartCard title="Avg Student Progress">
-          <div className="flex flex-col justify-center h-full gap-4">
-            <div className="text-3xl font-bold text-slate-800">{data.avgProgress}%</div>
-            <ProgressBar value={data.avgProgress} />
+        <ChartCard title="Average Student Progress">
+          <div className="flex flex-col justify-center h-full gap-5 py-6">
+            <div className="flex items-end gap-2">
+              <span className="text-5xl font-black text-slate-800 tracking-tighter">{data.avgProgress}</span>
+              <span className="text-2xl font-bold text-slate-400 mb-1">%</span>
+            </div>
+            <ProgressBar value={data.avgProgress} size="lg" color="primary" />
+            <p className="text-sm text-slate-500 font-medium">Across all your active courses</p>
           </div>
         </ChartCard>
       </div>
-      <ChartCard title="Recent Alerts">
+      <ChartCard title="Action Required">
         <AlertList alerts={data.alerts} />
       </ChartCard>
     </div>
@@ -254,78 +264,104 @@ function ProfessorDashboard({ data }: { data: any }) {
 function StudentDashboard({ data }: { data: any }) {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-slate-800">My Learning</h1>
-        <p className="text-sm text-slate-500">Progress, scores, and upcoming activities</p>
+      <div className="flex flex-col gap-1 mb-8">
+        <h1 className="text-2xl font-black text-slate-800 tracking-tight">My Learning Hub</h1>
+        <p className="text-slate-500 font-medium">Track your progress, scores, and upcoming activities</p>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Enrolled" value={data.courses} icon={<BookOpen size={20} />} color="sky" />
-        <StatCard label="Lectures Done" value={data.completedLectures} icon={<CheckCircle2 size={20} />} color="emerald" />
-        <StatCard label="Study Streak" value={`${data.studyStreak} Days`} icon={<TrendingUp size={20} />} color="violet" />
-        <StatCard label="Bookmarks" value={data.bookmarks} icon={<BookMarked size={20} />} color="amber" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+        <StatCard label="Enrolled Courses" value={data.courses} icon={<BookOpen size={20} />} color="sky" />
+        <StatCard label="Lectures Completed" value={data.completedLectures} icon={<CheckCircle2 size={20} />} color="emerald" />
+        <StatCard label="Learning Streak" value={`${data.studyStreak} Days`} icon={<TrendingUp size={20} />} color="violet" trend="up" trendLabel="Active" />
+        <StatCard label="Saved Items" value={data.bookmarks} icon={<BookMarked size={20} />} color="amber" />
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <StatCard label="Avg Progress" value={`${data.avgProgress}%`} icon={<BarChart3 size={20} />} color="sky" />
-        <StatCard label="Avg Exam Score" value={data.avgScore} icon={<Award size={20} />} color="emerald" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-6">
+        <StatCard label="Overall Progress" value={`${data.avgProgress}%`} icon={<BarChart3 size={20} />} color="sky" />
+        <StatCard label="Average Score" value={`${data.avgScore}%`} icon={<Award size={20} />} color="emerald" />
         <StatCard label="Exams Passed" value={`${data.passed}/${data.attempts}`} icon={<Target size={20} />} color="amber" />
       </div>
-      <ChartCard title="Course Progress">
-        <div className="space-y-3">
-          {(data.courseList || []).map((c: any) => (
-            <div key={c.id} className="flex items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-sm font-medium text-slate-700 truncate">{c.title}</p>
-                  <Badge color={c.status === 'completed' ? 'green' : 'blue'}>{c.status}</Badge>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-6">
+        <div className="lg:col-span-2">
+          <ChartCard title="Current Course Progress">
+            <div className="space-y-5 pt-2">
+              {(data.courseList || []).map((c: any) => (
+                <div key={c.id} className="flex flex-col gap-2 p-3 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <p className="font-bold text-slate-800 truncate">{c.title}</p>
+                    <Badge color={c.status === 'completed' ? 'success' : 'primary'}>{c.status}</Badge>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <ProgressBar value={c.progress || 0} color={c.status === 'completed' ? 'success' : 'primary'} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-600 w-10 text-right">{Math.round(c.progress || 0)}%</span>
+                  </div>
                 </div>
-                <ProgressBar value={c.progress || 0} />
-              </div>
-              <span className="text-sm font-semibold text-slate-600 w-12 text-right">{Math.round(c.progress || 0)}%</span>
+              ))}
+              {(data.courseList || []).length === 0 && (
+                <div className="text-center py-8">
+                  <BookOpen size={32} className="mx-auto text-slate-300 mb-3" />
+                  <p className="text-slate-500 font-medium">You haven't enrolled in any courses yet</p>
+                </div>
+              )}
             </div>
-          ))}
-          {(data.courseList || []).length === 0 && <p className="text-sm text-slate-400 text-center py-4">No enrollments yet</p>}
+          </ChartCard>
         </div>
-      </ChartCard>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard title="Attendance Log">
-          <div className="space-y-3">
-            {(data.attendanceLog || []).map((a: any) => (
-              <div key={a.id} className="flex items-center justify-between p-2 rounded-lg border border-slate-100 bg-slate-50">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-700 truncate">{a.lectureTitle}</p>
-                  <p className="text-xs text-slate-500 truncate">{a.courseTitle}</p>
+        <div className="space-y-5">
+          <ChartCard title="Recent Activity">
+            <div className="space-y-3 pt-2">
+              {(data.attendanceLog || []).map((a: any) => (
+                <div key={a.id} className="flex flex-col gap-1.5 p-3 rounded-xl border border-slate-100 bg-slate-50 hover:bg-slate-100/80 transition-colors">
+                  <p className="text-sm font-bold text-slate-700 line-clamp-1">{a.lectureTitle}</p>
+                  <p className="text-xs text-slate-500 line-clamp-1">{a.courseTitle}</p>
+                  <div className="flex items-center justify-between mt-1 pt-2 border-t border-slate-200/60">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      {new Date(a.lastViewedAt).toLocaleDateString()}
+                    </span>
+                    <Badge color={a.completedAt ? 'success' : 'slate'}>{Math.round(a.watchSeconds / 60)} min</Badge>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <Badge color={a.completedAt ? 'green' : 'blue'}>{Math.round(a.watchSeconds / 60)} min</Badge>
-                  <p className="text-[10px] text-slate-400 mt-1">{new Date(a.lastViewedAt).toLocaleDateString()}</p>
-                </div>
-              </div>
-            ))}
-            {(data.attendanceLog || []).length === 0 && <p className="text-sm text-slate-400 text-center py-4">No attendance records yet</p>}
-          </div>
-        </ChartCard>
-        <ChartCard title="Recent Alerts">
-          <AlertList alerts={data.alerts} />
-        </ChartCard>
+              ))}
+              {(data.attendanceLog || []).length === 0 && <p className="text-sm font-medium text-slate-400 text-center py-6">No recent activity</p>}
+            </div>
+          </ChartCard>
+        </div>
       </div>
     </div>
   );
 }
 
 function AlertList({ alerts }: { alerts: any[] }) {
-  if (!alerts || alerts.length === 0) return <p className="text-sm text-slate-400 text-center py-4">No alerts</p>;
-  const sev = (s: string) => (s === 'critical' ? 'red' : s === 'warning' ? 'amber' : 'slate');
+  if (!alerts || alerts.length === 0) return (
+    <div className="text-center py-8">
+      <CheckCircle2 size={32} className="mx-auto text-emerald-300 mb-3" />
+      <p className="text-slate-500 font-medium">You're all caught up!</p>
+    </div>
+  );
+  const sev = (s: string) => (s === 'critical' ? 'danger' : s === 'warning' ? 'warning' : 'slate');
   return (
-    <div className="space-y-2">
+    <div className="space-y-3 pt-2">
       {alerts.map((a) => (
-        <div key={a.id} className="flex items-start gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50">
-          <AlertTriangle size={16} className={`mt-0.5 ${a.severity === 'critical' ? 'text-rose-500' : a.severity === 'warning' ? 'text-amber-500' : 'text-slate-400'}`} />
+        <div key={a.id} className={`flex items-start gap-3 p-4 rounded-xl border ${
+          a.severity === 'critical' ? 'bg-danger-50 border-danger-100' :
+          a.severity === 'warning' ? 'bg-warning-50 border-warning-100' :
+          'bg-slate-50 border-slate-100 hover:bg-slate-100/50 transition-colors'
+        }`}>
+          <AlertTriangle size={18} className={`mt-0.5 shrink-0 ${
+            a.severity === 'critical' ? 'text-danger-500' :
+            a.severity === 'warning' ? 'text-warning-500' : 'text-slate-400'
+          }`} />
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-medium text-slate-700">{a.title}</p>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <p className={`text-sm font-bold truncate ${
+                a.severity === 'critical' ? 'text-danger-900' :
+                a.severity === 'warning' ? 'text-warning-900' : 'text-slate-700'
+              }`}>{a.title}</p>
               <Badge color={sev(a.severity)}>{a.severity}</Badge>
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">{a.message}</p>
+            <p className={`text-xs leading-relaxed ${
+              a.severity === 'critical' ? 'text-danger-700' :
+              a.severity === 'warning' ? 'text-warning-700' : 'text-slate-500'
+            }`}>{a.message}</p>
           </div>
         </div>
       ))}
