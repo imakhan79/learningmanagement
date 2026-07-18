@@ -44,20 +44,59 @@ export default function ReportsPage() {
 }
 
 async function loadAdmin(setData: (d: any) => void) {
-  const [profiles, courses, enrollments, attempts, alerts] = await Promise.all([
+  const [profiles, courses, enrollments, attempts, alerts, attendance] = await Promise.all([
     supabase.from('profiles').select('id, email, full_name, role, status, created_at'),
-    supabase.from('courses').select('id, title, status, category, created_at'),
-    supabase.from('enrollments').select('id, course_id, student_id, status, progress_pct, enrolled_at, completed_at'),
-    supabase.from('exam_attempts').select('id, exam_id, student_id, score, total_marks, status, submitted_at'),
-    supabase.from('alerts').select('id, user_id, severity, title, message, created_at, read_at'),
+    supabase.from('courses').select('id, title, status, category, created_at, professor_id'),
+    supabase.from('enrollments').select('id, course_id, student_id, status, progress_pct, enrolled_at, completed_at, course:courses(title), student:profiles(full_name, email)'),
+    supabase.from('exam_attempts').select('id, exam_id, student_id, score, total_marks, status, submitted_at, exam:exams(title), student:profiles(full_name)'),
+    supabase.from('alerts').select('id, user_id, severity, title, message, created_at, read_at, user:profiles(full_name)'),
+    supabase.from('live_attendance').select('id, session_id, user_id, joined_at, duration_seconds, session:live_sessions(title), user:profiles(full_name)'),
   ]);
+
+  const allCourses = courses.data || [];
+  const allEnroll = enrollments.data || [];
+  const allAtt = attempts.data || [];
+  const allProfs = (profiles.data || []).filter(p => p.role === 'professor');
+
+  // Institution Performance (Totals & Aggregates)
+  const institutionRows = [{
+    'Total Users': (profiles.data || []).length,
+    'Total Courses': allCourses.length,
+    'Total Enrollments': allEnroll.length,
+    'Total Exams Taken': allAtt.length,
+    'Overall Pass Rate': allAtt.length ? `${Math.round((allAtt.filter(a => a.status === 'passed').length / allAtt.length) * 100)}%` : '0%',
+  }];
+
+  // Professor KPI
+  const profRows = allProfs.map(p => {
+    const profCourses = allCourses.filter(c => c.professor_id === p.id);
+    const profEnroll = allEnroll.filter(e => profCourses.some(c => c.id === e.course_id));
+    return {
+      Professor: p.full_name || p.email,
+      Status: p.status,
+      'Active Courses': profCourses.length,
+      'Total Students': profEnroll.length,
+      Joined: formatDate(p.created_at)
+    };
+  });
+
+  // Course Completions
+  const completionRows = allEnroll.filter(e => e.status === 'completed').map(e => ({
+    Student: (e.student as any)?.full_name || (e.student as any)?.email,
+    Course: (e.course as any)?.title,
+    'Enrolled Date': formatDate(e.enrolled_at),
+    'Completed Date': e.completed_at ? formatDate(e.completed_at) : '—',
+  }));
+
   setData({
-    userRows: (profiles.data || []).map((p) => ({ Email: p.email, Name: p.full_name, Role: p.role, Status: p.status, Joined: formatDate(p.created_at) })),
-    courseRows: (courses.data || []).map((c) => ({ Title: c.title, Status: c.status, Category: c.category, Created: formatDate(c.created_at) })),
-    enrollRows: (enrollments.data || []).map((e) => ({ Course: e.course_id, Student: e.student_id, Status: e.status, Progress: e.progress_pct, Enrolled: formatDate(e.enrolled_at) })),
-    examRows: (attempts.data || []).map((a) => ({ Exam: a.exam_id, Student: a.student_id, Score: a.score, Total: a.total_marks, Status: a.status, Submitted: a.submitted_at ? formatDate(a.submitted_at) : '—' })),
-    alertRows: (alerts.data || []).map((a) => ({ Severity: a.severity, Title: a.title, Message: a.message, Created: formatDate(a.created_at), Read: a.read_at ? 'Yes' : 'No' })),
-    totals: { users: (profiles.data || []).length, courses: (courses.data || []).length, enrollments: (enrollments.data || []).length, attempts: (attempts.data || []).length, alerts: (alerts.data || []).length },
+    instRows: institutionRows,
+    profRows: profRows,
+    studentRows: allEnroll.map((e) => ({ Student: (e.student as any)?.full_name || (e.student as any)?.email, Course: (e.course as any)?.title, Status: e.status, Progress: e.progress_pct, Enrolled: formatDate(e.enrolled_at) })),
+    attendanceRows: (attendance.data || []).map((a) => ({ Student: (a.user as any)?.full_name, Session: (a.session as any)?.title, Joined: formatDate(a.joined_at), 'Duration (Min)': Math.round((a.duration_seconds || 0) / 60) })),
+    completionRows: completionRows,
+    examRows: allAtt.map((a) => ({ Student: (a.student as any)?.full_name, Exam: (a.exam as any)?.title, Score: a.score, Total: a.total_marks, Status: a.status, Submitted: a.submitted_at ? formatDate(a.submitted_at) : '—' })),
+    alertRows: (alerts.data || []).map((a) => ({ User: (a.user as any)?.full_name, Severity: a.severity, Title: a.title, Message: a.message, Created: formatDate(a.created_at) })),
+    totals: { users: (profiles.data || []).length, courses: allCourses.length, enrollments: allEnroll.length, alerts: (alerts.data || []).length },
   });
 }
 
@@ -65,52 +104,75 @@ async function loadProf(setData: (d: any) => void, profId: string) {
   const { data: courses } = await supabase.from('courses').select('id, title').eq('professor_id', profId);
   const ids = (courses || []).map((c) => c.id);
   if (!ids.length) { setData({}); return; }
-  const [enrollments, lectures, attempts] = await Promise.all([
-    supabase.from('enrollments').select('student_id, course_id, progress_pct, status').in('course_id', ids),
-    supabase.from('lectures').select('id, title, created_at').in('course_id', ids),
-    supabase.from('exam_attempts').select('id, score, total_marks, status, student_id').in('exam_id',
-      ((await supabase.from('exams').select('id').in('course_id', ids)).data || []).map((e) => e.id)),
+
+  const [enrollments, lectures, attempts, prog, liveAtt] = await Promise.all([
+    supabase.from('enrollments').select('student_id, course_id, progress_pct, status, completed_at, student:profiles(full_name, email)').in('course_id', ids),
+    supabase.from('lectures').select('id, title, created_at, course_id').in('course_id', ids),
+    supabase.from('exam_attempts').select('id, score, total_marks, status, student_id, submitted_at, exam:exams(title), student:profiles(full_name)').in('exam_id', ((await supabase.from('exams').select('id').in('course_id', ids)).data || []).map((e) => e.id)),
+    supabase.from('lecture_progress').select('student_id, lecture_id, completion_pct, total_watch_seconds, student:profiles(full_name), lecture:lectures(title)').in('lecture_id', ((await supabase.from('lectures').select('id').in('course_id', ids)).data || []).map((l) => l.id)),
+    supabase.from('live_attendance').select('user_id, session_id, duration_seconds, user:profiles(full_name), session:live_sessions(title)').in('session_id', ((await supabase.from('live_sessions').select('id').in('course_id', ids)).data || []).map((s) => s.id)),
   ]);
+
+  const allEnroll = enrollments.data || [];
+  
   setData({
-    studentRows: (enrollments.data || []).map((e) => ({ Student: e.student_id, Course: courses?.find((c) => c.id === e.course_id)?.title, Progress: e.progress_pct, Status: e.status })),
-    lectureRows: (lectures.data || []).map((l) => ({ Title: l.title, Created: formatDate(l.created_at) })),
-    examRows: (attempts.data || []).map((a) => ({ Student: a.student_id, Score: a.score, Total: a.total_marks, Status: a.status })),
-    totals: { students: new Set((enrollments.data || []).map((e) => e.student_id)).size, lectures: (lectures.data || []).length, attempts: (attempts.data || []).length },
+    studentRows: allEnroll.map((e) => ({ Student: (e.student as any)?.full_name || (e.student as any)?.email, Course: courses?.find((c) => c.id === e.course_id)?.title, Progress: `${e.progress_pct}%`, Status: e.status })),
+    lectureRows: (lectures.data || []).map((l) => ({ Title: l.title, Course: courses?.find((c) => c.id === l.course_id)?.title, Created: formatDate(l.created_at) })),
+    completionRows: allEnroll.filter(e => e.status === 'completed').map(e => ({ Student: (e.student as any)?.full_name, Course: courses?.find((c) => c.id === e.course_id)?.title, Completed: e.completed_at ? formatDate(e.completed_at) : '—' })),
+    examRows: (attempts.data || []).map((a) => ({ Student: (a.student as any)?.full_name, Quiz: (a.exam as any)?.title, Score: a.score, Total: a.total_marks, Status: a.status, Submitted: a.submitted_at ? formatDate(a.submitted_at) : '—' })),
+    engagementRows: [
+      ...(prog.data || []).map((p) => ({ Student: (p.student as any)?.full_name, Activity: `Lecture: ${(p.lecture as any)?.title}`, Metric: `${Math.round((p.total_watch_seconds || 0) / 60)} mins watched`, Type: 'VOD' })),
+      ...(liveAtt.data || []).map((a) => ({ Student: (a.user as any)?.full_name, Activity: `Live: ${(a.session as any)?.title}`, Metric: `${Math.round((a.duration_seconds || 0) / 60)} mins attended`, Type: 'Live' }))
+    ],
+    totals: { students: new Set(allEnroll.map((e) => e.student_id)).size, courses: ids.length, lectures: (lectures.data || []).length, attempts: (attempts.data || []).length },
   });
 }
 
 async function loadStudent(setData: (d: any) => void, studentId: string) {
-  const [enr, prog, att] = await Promise.all([
+  const [enr, prog, att, liveAtt] = await Promise.all([
     supabase.from('enrollments').select('progress_pct, status, course:courses(title), enrolled_at, completed_at').eq('student_id', studentId),
     supabase.from('lecture_progress').select('lecture:lectures(title), completion_pct, total_watch_seconds, completed_at').eq('student_id', studentId),
     supabase.from('exam_attempts').select('score, total_marks, status, exam:exams(title), submitted_at').eq('student_id', studentId),
+    supabase.from('live_attendance').select('joined_at, duration_seconds, session:live_sessions(title)').eq('user_id', studentId),
   ]);
+
+  const allEnroll = enr.data || [];
+
   setData({
-    courseRows: (enr.data || []).map((e: any) => ({ Course: e.course?.title, Progress: e.progress_pct, Status: e.status, Enrolled: formatDate(e.enrolled_at), Completed: e.completed_at ? formatDate(e.completed_at) : '—' })),
-    lectureRows: (prog.data || []).map((p: any) => ({ Lecture: p.lecture?.title, Completion: p.completion_pct, WatchMin: Math.round((p.total_watch_seconds || 0) / 60), Completed: p.completed_at ? 'Yes' : 'No' })),
-    examRows: (att.data || []).map((a: any) => ({ Exam: a.exam?.title, Score: a.score, Total: a.total_marks, Status: a.status, Submitted: a.submitted_at ? formatDate(a.submitted_at) : '—' })),
-    totals: { courses: (enr.data || []).length, lectures: (prog.data || []).length, exams: (att.data || []).length },
+    courseRows: allEnroll.map((e: any) => ({ Course: e.course?.title, Progress: `${e.progress_pct}%`, Status: e.status, Enrolled: formatDate(e.enrolled_at) })),
+    attendanceRows: [
+      ...(prog.data || []).map((p: any) => ({ Activity: `Lecture: ${p.lecture?.title}`, 'Duration (Min)': Math.round((p.total_watch_seconds || 0) / 60), Type: 'VOD', Completed: p.completed_at ? 'Yes' : 'No' })),
+      ...(liveAtt.data || []).map((a: any) => ({ Activity: `Live Session: ${a.session?.title}`, 'Duration (Min)': Math.round((a.duration_seconds || 0) / 60), Type: 'Live', Completed: '—' }))
+    ],
+    examRows: (att.data || []).map((a: any) => ({ Quiz: a.exam?.title, Score: a.score, Total: a.total_marks, Status: a.status, Submitted: a.submitted_at ? formatDate(a.submitted_at) : '—' })),
+    certRows: allEnroll.filter(e => e.status === 'completed').map((e: any) => ({ Course: e.course?.title, Completed: e.completed_at ? formatDate(e.completed_at) : '—', 'Certificate Status': 'Eligible / Auto-Issued' })),
+    totals: { courses: allEnroll.length, completions: allEnroll.filter(e => e.status === 'completed').length, quizzes: (att.data || []).length },
   });
 }
 
 function ReportsView({ role, data, exportCsv }: { role: string; data: any; exportCsv: (r: any[], f: string) => void }) {
   const sections = {
     admin: [
-      { title: 'User Report', rows: data.userRows, file: 'users.csv' },
-      { title: 'Course Report', rows: data.courseRows, file: 'courses.csv' },
-      { title: 'Enrollment Report', rows: data.enrollRows, file: 'enrollments.csv' },
-      { title: 'Exam Performance', rows: data.examRows, file: 'exam_performance.csv' },
+      { title: 'Institution Performance', rows: data.instRows, file: 'institution_performance.csv' },
+      { title: 'Professor KPI Report', rows: data.profRows, file: 'professor_kpi.csv' },
+      { title: 'Student Progress Report', rows: data.studentRows, file: 'student_progress.csv' },
+      { title: 'Attendance Report', rows: data.attendanceRows, file: 'attendance.csv' },
+      { title: 'Course Completion Report', rows: data.completionRows, file: 'course_completions.csv' },
+      { title: 'Exam Performance Report', rows: data.examRows, file: 'exam_performance.csv' },
       { title: 'Alert History', rows: data.alertRows, file: 'alerts.csv' },
     ],
     professor: [
       { title: 'Student Performance', rows: data.studentRows, file: 'student_performance.csv' },
       { title: 'Lecture Analytics', rows: data.lectureRows, file: 'lecture_analytics.csv' },
+      { title: 'Course Completions', rows: data.completionRows, file: 'course_completions.csv' },
       { title: 'Quiz Results', rows: data.examRows, file: 'quiz_results.csv' },
+      { title: 'Engagement Report', rows: data.engagementRows, file: 'student_engagement.csv' },
     ],
     student: [
       { title: 'Progress Report', rows: data.courseRows, file: 'my_progress.csv' },
-      { title: 'Attendance / Lecture Report', rows: data.lectureRows, file: 'my_lectures.csv' },
-      { title: 'Exam Results', rows: data.examRows, file: 'my_exams.csv' },
+      { title: 'Attendance & Viewing Report', rows: data.attendanceRows, file: 'my_attendance.csv' },
+      { title: 'Quiz History & Exam Results', rows: data.examRows, file: 'my_exams.csv' },
+      { title: 'Course Completion Certificate Status', rows: data.certRows, file: 'my_certificates.csv' },
     ],
   } as any;
 

@@ -96,13 +96,15 @@ export default function Shell({
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+      <nav aria-label="Desktop Navigation" className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {items.map((item) => {
           const isActive = active === item.id;
           return (
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
+              aria-label={item.label}
+              aria-current={isActive ? 'page' : undefined}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
                 isActive
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'

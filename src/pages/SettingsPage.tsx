@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Shield, Database, Bell } from 'lucide-react';
+import { Shield, Database, Bell, Lock } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { Card, Button, Badge, Spinner, Input } from '../components/ui';
@@ -17,6 +17,10 @@ export default function SettingsPage() {
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  // Security State
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [showMfaSetup, setShowMfaSetup] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -91,6 +95,39 @@ export default function SettingsPage() {
           <Button onClick={saveProfile} disabled={saving}>{saving ? 'Saving…' : 'Save Settings'}</Button>
           {saved && <Badge color="green">Saved</Badge>}
         </div>
+      </Card>
+
+      <Card className="p-5">
+        <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2"><Lock size={16} /> Security</h3>
+        <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl max-w-xl">
+          <div>
+            <p className="font-semibold text-slate-800">Multi-Factor Authentication (MFA)</p>
+            <p className="text-sm text-slate-500 mt-0.5">Protect your account with an additional security step.</p>
+          </div>
+          <button 
+            onClick={() => {
+              if (mfaEnabled) {
+                setMfaEnabled(false);
+              } else {
+                setShowMfaSetup(true);
+              }
+            }}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${mfaEnabled ? 'bg-rose-100 text-rose-700 hover:bg-rose-200' : 'bg-slate-900 text-white hover:bg-slate-800'}`}
+          >
+            {mfaEnabled ? 'Disable MFA' : 'Enable MFA'}
+          </button>
+        </div>
+
+        {showMfaSetup && !mfaEnabled && (
+          <div className="mt-4 p-4 border border-emerald-200 bg-emerald-50 rounded-xl max-w-xl animate-fade-in">
+            <h4 className="font-bold text-emerald-800 mb-2">Simulated MFA Setup</h4>
+            <p className="text-sm text-emerald-700 mb-4">In a production environment, you would scan a QR code with your authenticator app here.</p>
+            <div className="flex gap-2">
+              <button onClick={() => { setMfaEnabled(true); setShowMfaSetup(false); }} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700">Simulate Verification Success</button>
+              <button onClick={() => setShowMfaSetup(false)} className="px-4 py-2 text-emerald-700 hover:bg-emerald-100 rounded-lg text-sm font-medium">Cancel</button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {profile?.role === 'admin' && (

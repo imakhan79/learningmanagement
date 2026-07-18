@@ -1,24 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense, lazy } from 'react';
 import { AuthProvider, useAuth } from './lib/auth';
 import { supabase } from './lib/supabase';
 import { evaluateUserKPIs } from './lib/kpiEngine';
 import { evaluateTimeBasedAlerts } from './lib/notificationEngine';
 import AuthPage from './pages/AuthPage';
 import Shell from './components/Shell';
-import DashboardPage from './pages/DashboardPage';
-import CoursesPage from './pages/CoursesPage';
-import LecturesPage from './pages/LecturesPage';
-import UsersPage from './pages/UsersPage';
-import QuestionBankPage from './pages/QuestionBankPage';
-import ExamsPage from './pages/ExamsPage';
-import AnalyticsPage from './pages/AnalyticsPage';
-import KpiPage from './pages/KpiPage';
-import ReportsPage from './pages/ReportsPage';
-import AlertsPage from './pages/AlertsPage';
-import AuditPage from './pages/AuditPage';
-import SettingsPage from './pages/SettingsPage';
-import LivePage from './pages/LivePage';
-import FinancePage from './pages/FinancePage';
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const CoursesPage = lazy(() => import('./pages/CoursesPage'));
+const LecturesPage = lazy(() => import('./pages/LecturesPage'));
+const UsersPage = lazy(() => import('./pages/UsersPage'));
+const QuestionBankPage = lazy(() => import('./pages/QuestionBankPage'));
+const ExamsPage = lazy(() => import('./pages/ExamsPage'));
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
+const KpiPage = lazy(() => import('./pages/KpiPage'));
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const AlertsPage = lazy(() => import('./pages/AlertsPage'));
+const AuditPage = lazy(() => import('./pages/AuditPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const LivePage = lazy(() => import('./pages/LivePage'));
+const FinancePage = lazy(() => import('./pages/FinancePage'));
 import { Spinner } from './components/ui';
 
 function AppInner() {
@@ -76,7 +76,9 @@ function AppInner() {
 
   return (
     <Shell active={active} onNavigate={setActive} alertsCount={unreadAlerts}>
-      {render()}
+      <Suspense fallback={<div className="flex h-full items-center justify-center"><Spinner /></div>}>
+        {render()}
+      </Suspense>
     </Shell>
   );
 }
