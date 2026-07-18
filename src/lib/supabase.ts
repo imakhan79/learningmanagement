@@ -11,7 +11,23 @@ export const supabase = createClient(url, anonKey, {
   },
 });
 
+// Helper to get current user ID
+const getCurrentUserId = async (): Promise<string | null> => {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) {
+    console.error('Error fetching user:', error);
+    return null;
+  }
+  return data?.user?.id ?? null;
+};
+
 export type Role = 'admin' | 'professor' | 'student';
+
+export interface NotificationPreferences {
+  in_app: boolean;
+  email: boolean;
+  push: boolean;
+}
 
 export interface Profile {
   id: string;
@@ -23,6 +39,7 @@ export interface Profile {
   phone: string;
   created_at: string;
   updated_at: string;
+  notification_preferences?: NotificationPreferences;
 }
 
 export interface Course {
@@ -241,15 +258,21 @@ export const uploadLectureAttachment = async (lectureId: string, attachment: Lec
 export const getLecture = async (lectureId: string) => supabase.from('lectures').select('*').eq('id', lectureId).single();
 export const getLectureAttachments = async (lectureId: string) => supabase.from('lecture_attachments').select('*').eq('lecture_id', lectureId);
 
-export const bookmarkLecture = async (lectureId: string) =>
-  supabase.from('bookmarks').insert({ lecture_id: lectureId, student_id: supabase.auth.user()?.id });
+export const bookmarkLecture = async (lectureId: string) => {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('User not authenticated');
+  return supabase.from('bookmarks').insert({ lecture_id: lectureId, student_id: userId });
+};
 
-export const resumeLecture = async (lectureId: string, position: number) =>
-  supabase.from('lecture_progress').upsert({
+export const resumeLecture = async (lectureId: string, position: number) => {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('User not authenticated');
+  return supabase.from('lecture_progress').upsert({
     lecture_id: lectureId,
-    student_id: supabase.auth.user()?.id,
+    student_id: userId,
     last_position_seconds: position,
   }, { onConflict: ['lecture_id', 'student_id'] });
+};
 
 // Lecture Activity Tracking
 export interface StudentAnalytics {
@@ -319,10 +342,12 @@ export interface LectureActivity {
 }
 
 /** Start tracking a lecture for the current user */
-export const startLectureActivity = async (lectureId: string) => {
+export const startLectureActivity = async (lectureId: string): Promise<{ data: LectureActivity[] | null; error: any }> => {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('User not authenticated');
   const { data, error } = await supabase.from('lecture_activity').insert({
     lecture_id: lectureId,
-    user_id: supabase.auth.user()?.id,
+    user_id: userId,
   });
   return { data, error };
 };

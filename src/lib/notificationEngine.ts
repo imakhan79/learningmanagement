@@ -18,7 +18,7 @@ async function dispatchExternalNotification(user: Profile, title: string, messag
  */
 export async function sendNotification(userId: string, type: string, severity: 'info'|'warning'|'critical', title: string, message: string) {
   try {
-    const { data: user } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    const { data: user } = await supabase.from('profiles').select('*').eq('id', userId).single();
     if (!user) return;
 
     const prefs = user.notification_preferences as any || { in_app: true, email: true, push: false };
@@ -84,7 +84,7 @@ export async function evaluateTimeBasedAlerts(userId: string, role: string) {
               `course_behind_${enr.id}`,
               'warning',
               'Course Behind Schedule',
-              `You are falling behind in "${Array.isArray(enr.course) ? enr.course[0]?.title : enr.course?.title}". Try to catch up on your lectures!`
+              `You are falling behind in "${(enr.course as any)?.title}". Try to catch up on your lectures!`
             );
           }
 
@@ -95,19 +95,14 @@ export async function evaluateTimeBasedAlerts(userId: string, role: string) {
               `course_due_soon_${enr.id}`,
               'critical',
               'Course Deadline Approaching',
-              `"${Array.isArray(enr.course) ? enr.course[0]?.title : enr.course?.title}" is due in ${Math.ceil(30 - daysElapsed)} days!`
+              `"${(enr.course as any)?.title}" is due in ${Math.ceil(30 - daysElapsed)} days!`
             );
           }
         }
       }
 
       // 2. Exam Reminders (Unattempted active exams published within last 7 days)
-      const { data: unattemptedExams } = await supabase
-        .from('exams')
-        .select('id, title, course:courses(title), publish_date')
-        .eq('status', 'published')
-        .gte('publish_date', new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString())
-        .not('id', 'in', `(SELECT exam_id FROM exam_attempts WHERE student_id = '${userId}')`);
+      const { data: unattemptedExams } = await supabase.from('exams').select('id, title, course:courses(title), publish_date').eq('status', 'published').gte('publish_date', new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString());
 
       if (unattemptedExams) {
         for (const exam of unattemptedExams) {
@@ -116,7 +111,7 @@ export async function evaluateTimeBasedAlerts(userId: string, role: string) {
             `exam_reminder_${exam.id}`,
             'info',
             'Exam Reminder',
-            `Don't forget to take the exam "${exam.title}" for ${exam.course?.title}.`
+            `Don't forget to take the exam "${exam.title}" for ${exam.course?.[0]?.title}.`
           );
         }
       }
