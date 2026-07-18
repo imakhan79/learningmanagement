@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './lib/auth';
 import { supabase } from './lib/supabase';
+import { evaluateUserKPIs } from './lib/kpiEngine';
 import AuthPage from './pages/AuthPage';
 import Shell from './components/Shell';
 import DashboardPage from './pages/DashboardPage';
@@ -25,6 +26,10 @@ function AppInner() {
   useEffect(() => {
     if (!profile) return;
     (async () => {
+      // Background continuous KPI evaluation
+      await evaluateUserKPIs(profile.id, profile.role);
+      
+      // Fetch unread alerts
       const { count } = await supabase.from('alerts').select('id', { count: 'exact', head: true }).eq('user_id', profile.id).is('read_at', null);
       setUnreadAlerts(count || 0);
     })();
