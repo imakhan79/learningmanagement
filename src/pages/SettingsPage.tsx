@@ -21,6 +21,76 @@ export default function SettingsPage() {
   // Security State
   const [mfaEnabled, setMfaEnabled] = useState(false);
   const [showMfaSetup, setShowMfaSetup] = useState(false);
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
+  const [mfaQrCode, setMfaQrCode] = useState<string | null>(null);
+  const [mfaSecret, setMfaSecret] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaError, setMfaError] = useState('');
+  const [mfaBusy, setMfaBusy] = useState(false);
+
+  const refreshMfaFactors = async () => {
+    const { data } = await supabase.auth.mfa.listFactors();
+    const verified = data?.totp?.find((f) => f.status === 'verified');
+    setMfaEnabled(!!verified);
+    setMfaFactorId(verified?.id || null);
+  };
+
+  useEffect(() => { refreshMfaFactors(); }, []);
+
+  const startMfaEnroll = async () => {
+    setMfaError('');
+    setMfaBusy(true);
+    // Clean up any stale unverified factor from a previous attempt before re-enrolling
+    const { data: existing } = await supabase.auth.mfa.listFactors();
+    const stale = existing?.totp?.find((f) => f.status === 'unverified');
+    if (stale) await supabase.auth.mfa.unenroll({ factorId: stale.id });
+
+    const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp' });
+    setMfaBusy(false);
+    if (error) { setMfaError(error.message); return; }
+    setMfaFactorId(data.id);
+    setMfaQrCode(data.totp.qr_code);
+    setMfaSecret(data.totp.secret);
+    setShowMfaSetup(true);
+  };
+
+  const verifyMfaEnroll = async () => {
+    if (!mfaFactorId || mfaCode.length !== 6) return;
+    setMfaBusy(true);
+    setMfaError('');
+    const { data: challenge, error: challengeErr } = await supabase.auth.mfa.challenge({ factorId: mfaFactorId });
+    if (challengeErr) { setMfaBusy(false); setMfaError(challengeErr.message); return; }
+    const { error: verifyErr } = await supabase.auth.mfa.verify({
+      factorId: mfaFactorId, challengeId: challenge.id, code: mfaCode,
+    });
+    setMfaBusy(false);
+    if (verifyErr) { setMfaError(verifyErr.message); return; }
+    setMfaEnabled(true);
+    setShowMfaSetup(false);
+    setMfaCode('');
+    setMfaQrCode(null);
+    setMfaSecret(null);
+  };
+
+  const disableMfa = async () => {
+    if (!mfaFactorId) return;
+    setMfaBusy(true);
+    const { error } = await supabase.auth.mfa.unenroll({ factorId: mfaFactorId });
+    setMfaBusy(false);
+    if (error) { setMfaError(error.message); return; }
+    setMfaEnabled(false);
+    setMfaFactorId(null);
+  };
+
+  const cancelMfaSetup = async () => {
+    if (mfaFactorId && !mfaEnabled) await supabase.auth.mfa.unenroll({ factorId: mfaFactorId });
+    setShowMfaSetup(false);
+    setMfaCode('');
+    setMfaQrCode(null);
+    setMfaSecret(null);
+    setMfaFactorId(null);
+    setMfaError('');
+  };
 
   useEffect(() => {
     (async () => {
@@ -71,8 +141,8 @@ export default function SettingsPage() {
       <Card className="p-5">
         <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2"><Shield size={16} /> Profile Settings</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
-          <Input label="Full Name" value={fullName} onChange={setFullName} />
-          <Input label="Phone" value={phone} onChange={setPhone} />
+          <Input label="Full Name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          <Input label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
         </div>
         
         <h3 className="text-sm font-semibold text-slate-700 mt-6 mb-3 flex items-center gap-2"><Bell size={16} /> Notification Channels</h3>
@@ -104,27 +174,43 @@ export default function SettingsPage() {
             <p className="font-semibold text-slate-800">Multi-Factor Authentication (MFA)</p>
             <p className="text-sm text-slate-500 mt-0.5">Protect your account with an additional security step.</p>
           </div>
-          <button 
-            onClick={() => {
-              if (mfaEnabled) {
-                setMfaEnabled(false);
-              } else {
-                setShowMfaSetup(true);
-              }
-            }}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${mfaEnabled ? 'bg-rose-100 text-rose-700 hover:bg-rose-200' : 'bg-slate-900 text-white hover:bg-slate-800'}`}
+          <button
+            onClick={mfaEnabled ? disableMfa : startMfaEnroll}
+            disabled={mfaBusy}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-60 ${mfaEnabled ? 'bg-rose-100 text-rose-700 hover:bg-rose-200' : 'bg-slate-900 text-white hover:bg-slate-800'}`}
           >
-            {mfaEnabled ? 'Disable MFA' : 'Enable MFA'}
+            {mfaBusy ? 'Please wait…' : mfaEnabled ? 'Disable MFA' : 'Enable MFA'}
           </button>
         </div>
 
+        {mfaError && <p className="mt-3 text-sm text-rose-600 max-w-xl">{mfaError}</p>}
+
         {showMfaSetup && !mfaEnabled && (
           <div className="mt-4 p-4 border border-emerald-200 bg-emerald-50 rounded-xl max-w-xl animate-fade-in">
-            <h4 className="font-bold text-emerald-800 mb-2">Simulated MFA Setup</h4>
-            <p className="text-sm text-emerald-700 mb-4">In a production environment, you would scan a QR code with your authenticator app here.</p>
-            <div className="flex gap-2">
-              <button onClick={() => { setMfaEnabled(true); setShowMfaSetup(false); }} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700">Simulate Verification Success</button>
-              <button onClick={() => setShowMfaSetup(false)} className="px-4 py-2 text-emerald-700 hover:bg-emerald-100 rounded-lg text-sm font-medium">Cancel</button>
+            <h4 className="font-bold text-emerald-800 mb-2">Set up Authenticator App</h4>
+            <p className="text-sm text-emerald-700 mb-4">Scan this QR code with Google Authenticator, Authy, or a similar TOTP app, then enter the 6-digit code it generates.</p>
+            {mfaQrCode && (
+              <div className="bg-white p-3 rounded-lg inline-block mb-3" dangerouslySetInnerHTML={{ __html: mfaQrCode }} />
+            )}
+            {mfaSecret && (
+              <p className="text-xs text-emerald-700 mb-3">Can't scan? Enter this key manually: <span className="font-mono font-bold">{mfaSecret}</span></p>
+            )}
+            <div className="flex items-center gap-2 max-w-xs">
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="123456"
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
+                className="input-field font-mono tracking-widest text-center"
+              />
+            </div>
+            <div className="flex gap-2 mt-3">
+              <button onClick={verifyMfaEnroll} disabled={mfaBusy || mfaCode.length !== 6} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-60">
+                {mfaBusy ? 'Verifying…' : 'Verify & Enable'}
+              </button>
+              <button onClick={cancelMfaSetup} className="px-4 py-2 text-emerald-700 hover:bg-emerald-100 rounded-lg text-sm font-medium">Cancel</button>
             </div>
           </div>
         )}

@@ -4,6 +4,7 @@ import { supabase } from './lib/supabase';
 import { evaluateUserKPIs } from './lib/kpiEngine';
 import { evaluateTimeBasedAlerts } from './lib/notificationEngine';
 import AuthPage from './pages/AuthPage';
+import MfaChallengePage from './pages/MfaChallengePage';
 import Shell from './components/Shell';
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const CoursesPage = lazy(() => import('./pages/CoursesPage'));
@@ -24,7 +25,7 @@ const CertificatePage = lazy(() => import('./pages/CertificatePage'));
 import { Spinner } from './components/ui';
 
 function AppInner() {
-  const { session, profile, loading } = useAuth();
+  const { session, profile, loading, mfaRequired } = useAuth();
   const [active, setActive] = useState('dashboard');
   const [unreadAlerts, setUnreadAlerts] = useState(0);
 
@@ -53,6 +54,10 @@ function AppInner() {
 
   if (!session || !profile) {
     return <AuthPage />;
+  }
+
+  if (mfaRequired) {
+    return <MfaChallengePage />;
   }
 
   const role = profile.role;

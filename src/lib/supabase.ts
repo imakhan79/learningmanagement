@@ -52,6 +52,7 @@ export interface Course {
   thumbnail_url: string;
   created_at: string;
   updated_at: string;
+  professor?: Pick<Profile, 'id' | 'email' | 'full_name' | 'role'>;
 }
 
 export interface Lecture {
@@ -271,7 +272,7 @@ export const resumeLecture = async (lectureId: string, position: number) => {
     lecture_id: lectureId,
     student_id: userId,
     last_position_seconds: position,
-  }, { onConflict: ['lecture_id', 'student_id'] });
+  }, { onConflict: 'student_id,lecture_id' });
 };
 
 // Lecture Activity Tracking

@@ -7,10 +7,12 @@ interface AuthState {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  mfaRequired: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string, role: 'admin' | 'professor' | 'student') => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  refreshMfaStatus: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -20,6 +22,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mfaRequired, setMfaRequired] = useState(false);
+
+  const refreshMfaStatus = async () => {
+    const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (error) { setMfaRequired(false); return; }
+    setMfaRequired(!!data && data.nextLevel === 'aal2' && data.currentLevel !== data.nextLevel);
+  };
 
   const loadProfile = async (uid: string) => {
     const { data, error } = await supabase
@@ -39,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(data.session);
       setUser(data.session?.user ?? null);
       if (data.session?.user) {
-        loadProfile(data.session.user.id).finally(() => setLoading(false));
+        Promise.all([loadProfile(data.session.user.id), refreshMfaStatus()]).finally(() => setLoading(false));
       } else {
         setLoading(false);
       }
@@ -50,10 +59,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(sess?.user ?? null);
       if (sess?.user) {
         (async () => {
-          await loadProfile(sess.user.id);
+          await Promise.all([loadProfile(sess.user.id), refreshMfaStatus()]);
         })();
       } else {
         setProfile(null);
+        setMfaRequired(false);
       }
     });
 
@@ -93,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, signIn, signUp, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ session, user, profile, loading, mfaRequired, signIn, signUp, signOut, refreshProfile, refreshMfaStatus }}>
       {children}
     </AuthContext.Provider>
   );

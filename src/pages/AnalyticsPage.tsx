@@ -175,12 +175,11 @@ async function loadProf(setData: (d: any) => void, profId: string) {
 
 // ─── STUDENT ANALYTICS ────────────────────────────────────────────────────────
 async function loadStudent(setData: (d: any) => void, studentId: string) {
-  const [enr, prog, att, attendance, responses] = await Promise.all([
+  const [enr, prog, att, attendance] = await Promise.all([
     supabase.from('enrollments').select('progress_pct, status, course:courses(title), enrolled_at').eq('student_id', studentId),
     supabase.from('lecture_progress').select('total_watch_seconds, completed_at, created_at').eq('student_id', studentId),
     supabase.from('exam_attempts').select('score, total_marks, exam:exams(type)').eq('student_id', studentId),
     supabase.from('lecture_attendance').select('status').eq('student_id', studentId),
-    supabase.from('exam_responses').select('is_correct, question:question_bank(subject, topic)').eq('student_id', studentId) // Assuming we join attempt to get student_id, simplified here by fetching all responses via attempt join in real app.
   ]);
 
   // For real app, fetching weak topics requires joining attempts and responses:
@@ -191,7 +190,7 @@ async function loadStudent(setData: (d: any) => void, studentId: string) {
 
   const e = enr.data || [];
   const p = prog.data || [];
-  const a = att.data || [];
+  const a = (att.data || []) as unknown as { score: number; total_marks: number; exam: { type: string } | null }[];
   const r = realResponses || [];
 
   // Learning Hours

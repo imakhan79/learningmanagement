@@ -10,7 +10,6 @@ import {
   X,
   CheckCircle2,
   AlertCircle,
-  Wifi,
   Film,
   ChevronRight,
   Edit2,

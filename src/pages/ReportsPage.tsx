@@ -177,7 +177,7 @@ function ReportsView({ role, data, exportCsv }: { role: string; data: any; expor
   } as any;
 
   const list = sections[role] || [];
-  if (list.length === 0 || !data.totals) return <Card><EmptyState icon={<FileText size={28} />} title="No data" subtitle="No report data available yet" /></Card>;
+  if (list.length === 0 || !data.totals) return <Card><EmptyState icon={<FileText size={28} />} title="No data" description="No report data available yet" /></Card>;
 
   return (
     <>

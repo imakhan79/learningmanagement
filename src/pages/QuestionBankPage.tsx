@@ -207,13 +207,13 @@ export default function QuestionBankPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3 pt-3 border-t border-slate-100">
             <Select
               value={typeFilter}
-              onChange={setTypeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
               options={[{ value: 'all', label: 'All Types' }, ...TYPES]}
               label="Type"
             />
             <Select
               value={statusFilter}
-              onChange={setStatusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
               options={[
                 { value: 'all', label: 'All Statuses' },
                 { value: 'draft', label: 'Draft' },
@@ -225,7 +225,7 @@ export default function QuestionBankPage() {
             />
             <Select
               value={categoryFilter}
-              onChange={setCategoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
               options={[{ value: 'all', label: 'All Categories' }, ...categories.map((c) => ({ value: c, label: c }))]}
               label="Category"
             />
@@ -235,7 +235,7 @@ export default function QuestionBankPage() {
 
       {/* Question list */}
       {filtered.length === 0 ? (
-        <Card><EmptyState icon={<ClipboardList size={32} />} title="No questions found" subtitle="Try adjusting your filters or create a new question" /></Card>
+        <Card><EmptyState icon={<ClipboardList size={32} />} title="No questions found" description="Try adjusting your filters or create a new question" /></Card>
       ) : (
         <div className="space-y-2">
           {filtered.map((q) => (
@@ -384,13 +384,13 @@ function ReuseModal({ source, courses, profileId, onClose, onSaved }: {
   };
 
   return (
-    <Modal open onClose={onClose} title="Reuse Question" size="sm">
-      <div className="space-y-4">
+    <Modal open onClose={onClose} title="Reuse Question" maxW="max-w-md">
+      <div className="space-y-4 p-6 pt-2">
         <p className="text-sm text-slate-600 bg-slate-50 rounded-lg p-3 border border-slate-200">{source.question_text}</p>
         <Select
           label="Assign to Course (optional)"
           value={courseId}
-          onChange={setCourseId}
+          onChange={(e) => setCourseId(e.target.value)}
           options={[{ value: '', label: 'Same course' }, ...courses.map((c) => ({ value: c.id, label: c.title }))]}
         />
         <div className="flex justify-end gap-2 pt-1">
@@ -465,30 +465,30 @@ function QuestionForm({ question, courses, role, onClose, onSaved }: {
   };
 
   return (
-    <Modal open onClose={onClose} title={question ? 'Edit Question' : 'New Question'} size="lg">
-      <div className="space-y-4">
+    <Modal open onClose={onClose} title={question ? 'Edit Question' : 'New Question'} maxW="max-w-3xl">
+      <div className="space-y-4 p-6 pt-2 max-h-[75vh] overflow-y-auto custom-scrollbar">
         {/* Type & Difficulty */}
         <div className="grid grid-cols-2 gap-3">
-          <Select label="Question Type" value={type} onChange={(v) => setType(v as any)} options={TYPES} />
-          <Select label="Difficulty" value={difficulty} onChange={(v) => setDifficulty(v as any)} options={DIFFICULTIES} />
+          <Select label="Question Type" value={type} onChange={(e) => setType(e.target.value as any)} options={TYPES} />
+          <Select label="Difficulty" value={difficulty} onChange={(e) => setDifficulty(e.target.value as any)} options={DIFFICULTIES} />
         </div>
 
         {/* Question text */}
-        <Textarea label="Question Text" value={text} onChange={setText} rows={3} placeholder="Type your question here…" />
+        <Textarea label="Question Text" value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="Type your question here…" />
 
         {/* Metadata */}
         <div className="grid grid-cols-2 gap-3">
-          <Input label="Subject" value={subject} onChange={setSubject} placeholder="e.g. Mathematics" />
-          <Input label="Topic" value={topic} onChange={setTopic} placeholder="e.g. Algebra" />
+          <Input label="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. Mathematics" />
+          <Input label="Topic" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Algebra" />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Input label="Category" value={category} onChange={setCategory} placeholder="e.g. Midterm Pool" />
-          <Input label="Tags (comma separated)" value={tagsInput} onChange={setTagsInput} placeholder="e.g. calculus, limits" />
+          <Input label="Category" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Midterm Pool" />
+          <Input label="Tags (comma separated)" value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} placeholder="e.g. calculus, limits" />
         </div>
         <div className="grid grid-cols-3 gap-3">
-          <Input label="Marks" value={marks} onChange={setMarks} type="number" />
-          <Input label="Time (seconds)" value={time} onChange={setTime} type="number" />
-          <Select label="Course" value={courseId} onChange={setCourseId} options={[{ value: '', label: '— None —' }, ...courses.map((c) => ({ value: c.id, label: c.title }))]} />
+          <Input label="Marks" value={marks} onChange={(e) => setMarks(e.target.value)} type="number" />
+          <Input label="Time (seconds)" value={time} onChange={(e) => setTime(e.target.value)} type="number" />
+          <Select label="Course" value={courseId} onChange={(e) => setCourseId(e.target.value)} options={[{ value: '', label: '— None —' }, ...courses.map((c) => ({ value: c.id, label: c.title }))]} />
         </div>
 
         {/* Options for MCQ / Multiple Select */}
@@ -521,16 +521,16 @@ function QuestionForm({ question, courses, role, onClose, onSaved }: {
 
         {/* True / False */}
         {type === 'true_false' && (
-          <Select label="Correct Answer" value={tfAnswer} onChange={setTfAnswer} options={[{ value: 'true', label: '✅ True' }, { value: 'false', label: '❌ False' }]} />
+          <Select label="Correct Answer" value={tfAnswer} onChange={(e) => setTfAnswer(e.target.value)} options={[{ value: 'true', label: '✅ True' }, { value: 'false', label: '❌ False' }]} />
         )}
 
         {/* Short answer / Essay model answer */}
         {(type === 'short_answer' || type === 'essay') && (
-          <Textarea label="Model Answer" value={textAnswer} onChange={setTextAnswer} rows={type === 'essay' ? 4 : 2} placeholder="Expected answer…" />
+          <Textarea label="Model Answer" value={textAnswer} onChange={(e) => setTextAnswer(e.target.value)} rows={type === 'essay' ? 4 : 2} placeholder="Expected answer…" />
         )}
 
         {/* Explanation */}
-        <Textarea label="Explanation (shown after submission)" value={explanation} onChange={setExplanation} rows={2} placeholder="Why is this the correct answer?" />
+        <Textarea label="Explanation (shown after submission)" value={explanation} onChange={(e) => setExplanation(e.target.value)} rows={2} placeholder="Why is this the correct answer?" />
 
         {/* Action buttons */}
         <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">

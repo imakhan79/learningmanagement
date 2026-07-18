@@ -50,7 +50,7 @@ export default function UsersPage() {
               className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
             />
           </div>
-          <Select value={roleFilter} onChange={setRoleFilter} options={[
+          <Select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} options={[
             { value: 'all', label: 'All Roles' },
             { value: 'admin', label: 'Admins' },
             { value: 'professor', label: 'Professors' },
@@ -138,12 +138,12 @@ function EditUserModal({ user, me, onClose, onSaved }: { user: Profile; me: Prof
 
   return (
     <Modal open onClose={onClose} title={`Edit — ${user.email}`}>
-      <div className="space-y-4">
-        <Input label="Full Name" value={fullName} onChange={setFullName} />
-        <Select label="Role" value={role} onChange={(v) => setRole(v as any)} options={[
+      <div className="space-y-4 p-6 pt-2">
+        <Input label="Full Name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+        <Select label="Role" value={role} onChange={(e) => setRole(e.target.value as any)} options={[
           { value: 'student', label: 'Student' }, { value: 'professor', label: 'Professor' }, { value: 'admin', label: 'Admin' },
         ]} />
-        <Select label="Status" value={status} onChange={setStatus} options={[
+        <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value as any)} options={[
           { value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' },
           { value: 'suspended', label: 'Suspended' }, { value: 'pending_activation', label: 'Pending Activation' },
         ]} />

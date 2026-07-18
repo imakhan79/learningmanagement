@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FileText, Plus, Play, Bookmark, Download, Upload, Trash2, ArrowLeft } from 'lucide-react';
+import { FileText, Plus, Play, Bookmark, Download, Upload, Trash2, ArrowLeft, Clock } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { supabase, Lecture, CourseMaterial, Course, startLectureActivity, updateLectureActivity, completeLectureActivity } from '../lib/supabase';
 import { Button, Card, Input, Textarea, Select, Badge, Spinner, EmptyState, Modal, ProgressBar, formatDuration, formatDate } from '../components/ui';
@@ -87,7 +87,7 @@ export default function LecturesPage() {
         </div>
         {courses.length === 0 ? (
           <Card className="py-4">
-            <EmptyState icon={<FileText size={32} />} title="No courses available" subtitle={role === 'student' ? 'Enroll in a course first' : 'Create a course first'} />
+            <EmptyState icon={<FileText size={32} />} title="No courses available" description={role === 'student' ? 'Enroll in a course first' : 'Create a course first'} />
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -128,7 +128,7 @@ export default function LecturesPage() {
       </div>
 
       {loading ? <Spinner /> : lectures.length === 0 ? (
-        <Card className="py-4"><EmptyState icon={<FileText size={32} />} title="No curriculum yet" subtitle={role === 'professor' ? 'Create your first lecture' : 'No lectures available for this course'} /></Card>
+        <Card className="py-4"><EmptyState icon={<FileText size={32} />} title="No curriculum yet" description={role === 'professor' ? 'Create your first lecture' : 'No lectures available for this course'} /></Card>
       ) : (
         <div className="space-y-4">
           {lectures.map((l) => (

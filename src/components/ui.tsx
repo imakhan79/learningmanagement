@@ -211,16 +211,41 @@ export function Button({
 /* ──────────────────────────────────────────────────
    FORMS
 ────────────────────────────────────────────────── */
-export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input className="input-field" {...props} />;
+export function Input({ label, className = '', ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label?: string }) {
+  const field = <input className={`input-field ${className}`} {...props} />;
+  if (!label) return field;
+  return (
+    <label className="block">
+      <span className="label">{label}</span>
+      {field}
+    </label>
+  );
 }
 
-export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className="textarea-field" {...props} />;
+export function Textarea({ label, className = '', ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: string }) {
+  const field = <textarea className={`textarea-field ${className}`} {...props} />;
+  if (!label) return field;
+  return (
+    <label className="block">
+      <span className="label">{label}</span>
+      {field}
+    </label>
+  );
 }
 
-export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className="select-field" {...props} />;
+export function Select({ label, className = '', options, children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement> & { label?: string; options?: { value: string; label: string }[] }) {
+  const field = (
+    <select className={`select-field ${className}`} {...props}>
+      {options ? options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>) : children}
+    </select>
+  );
+  if (!label) return field;
+  return (
+    <label className="block">
+      <span className="label">{label}</span>
+      {field}
+    </label>
+  );
 }
 
 /* ──────────────────────────────────────────────────

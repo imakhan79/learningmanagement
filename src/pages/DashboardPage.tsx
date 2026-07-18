@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   Activity,
   BookMarked,
+  BarChart3,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
@@ -189,7 +190,7 @@ function AdminDashboard({ data }: { data: any }) {
         <h1 className="text-2xl font-black text-slate-800 tracking-tight">Institution Overview</h1>
         <p className="text-slate-500 font-medium">Real-time KPIs and system health monitoring</p>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
         <StatCard label="Students" value={data.students} icon={<Users size={20} />} color="sky" trend="up" trendLabel="+12%" />
         <StatCard label="Professors" value={data.professors} icon={<GraduationCap size={20} />} color="emerald" trend="up" trendLabel="+5%" />
         <StatCard label="Courses" value={data.courses} icon={<BookOpen size={20} />} color="violet" />
@@ -231,7 +232,7 @@ function ProfessorDashboard({ data }: { data: any }) {
         <h1 className="text-2xl font-black text-slate-800 tracking-tight">Professor Dashboard</h1>
         <p className="text-slate-500 font-medium">Your courses, engagement, and KPI achievement</p>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
         <StatCard label="My Courses" value={data.courses} icon={<BookOpen size={20} />} color="sky" />
         <StatCard label="Lectures" value={data.lectures} icon={<Clock size={20} />} color="emerald" />
         <StatCard label="Students" value={data.students} icon={<Users size={20} />} color="violet" trend="up" trendLabel="+8%" />
@@ -268,13 +269,13 @@ function StudentDashboard({ data }: { data: any }) {
         <h1 className="text-2xl font-black text-slate-800 tracking-tight">My Learning Hub</h1>
         <p className="text-slate-500 font-medium">Track your progress, scores, and upcoming activities</p>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
         <StatCard label="Enrolled Courses" value={data.courses} icon={<BookOpen size={20} />} color="sky" />
         <StatCard label="Lectures Completed" value={data.completedLectures} icon={<CheckCircle2 size={20} />} color="emerald" />
         <StatCard label="Learning Streak" value={`${data.studyStreak} Days`} icon={<TrendingUp size={20} />} color="violet" trend="up" trendLabel="Active" />
         <StatCard label="Saved Items" value={data.bookmarks} icon={<BookMarked size={20} />} color="amber" />
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5 mt-6">
         <StatCard label="Overall Progress" value={`${data.avgProgress}%`} icon={<BarChart3 size={20} />} color="sky" />
         <StatCard label="Average Score" value={`${data.avgScore}%`} icon={<Award size={20} />} color="emerald" />
         <StatCard label="Exams Passed" value={`${data.passed}/${data.attempts}`} icon={<Target size={20} />} color="amber" />

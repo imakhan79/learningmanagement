@@ -90,7 +90,7 @@ export default function KpiPage() {
         </div>
         <div className="flex gap-2">
           {role === 'admin' && users.length > 0 && (
-            <Select value={selectedUser} onChange={setSelectedUser} options={[{ value: '', label: 'Select user to compute…' }, ...users.map((u) => ({ value: u.id, label: `${u.full_name || u.email} (${u.role})` }))]} />
+            <Select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)} options={[{ value: '', label: 'Select user to compute…' }, ...users.map((u) => ({ value: u.id, label: `${u.full_name || u.email} (${u.role})` }))]} />
           )}
           {selectedUser && <Button onClick={() => compute(selectedUser)}><Target size={16} /> Compute KPIs</Button>}
           {role === 'professor' && <Button variant="outline" onClick={() => compute(profile!.id)}><Target size={16} /> Refresh My KPIs</Button>}
@@ -102,7 +102,7 @@ export default function KpiPage() {
         <Card className="p-5">
           <h3 className="text-sm font-semibold text-slate-700 mb-3">KPI Configurations</h3>
           {configs.length === 0 ? (
-            <EmptyState icon={<Target size={28} />} title="No KPIs configured" subtitle="Create KPI targets to monitor performance" />
+            <EmptyState icon={<Target size={28} />} title="No KPIs configured" description="Create KPI targets to monitor performance" />
           ) : (
             <div className="space-y-2">
               {configs.map((c) => (
@@ -143,7 +143,7 @@ export default function KpiPage() {
           );
         })}
         {configs.length === 0 && role !== 'admin' && (
-          <Card className="md:col-span-2"><EmptyState icon={<Target size={28} />} title="No KPIs assigned" subtitle="Admins need to configure KPI targets" /></Card>
+          <Card className="md:col-span-2"><EmptyState icon={<Target size={28} />} title="No KPIs assigned" description="Admins need to configure KPI targets" /></Card>
         )}
       </div>
 
@@ -175,24 +175,30 @@ function KpiForm({ config, onClose, onSaved }: { config: KpiConfig | null; onClo
 
   return (
     <Modal open onClose={onClose} title={config ? 'Edit KPI' : 'New KPI Configuration'}>
-      <div className="space-y-4">
-        <Input label="Name" value={name} onChange={setName} placeholder="Lectures Created" required />
+      <div className="space-y-4 p-6 pt-2">
+        <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Lectures Created" required />
         <div className="grid grid-cols-2 gap-3">
-          <Select label="Role" value={role} onChange={(v) => setRole(v as any)} options={[{ value: 'professor', label: 'Professor' }, { value: 'student', label: 'Student' }]} />
-          <Select label="Metric" value={metricKey} onChange={setMetricKey} options={[
+          <Select label="Role" value={role} onChange={(e) => setRole(e.target.value as any)} options={[{ value: 'professor', label: 'Professor' }, { value: 'student', label: 'Student' }]} />
+          <Select label="Metric" value={metricKey} onChange={(e) => setMetricKey(e.target.value)} options={[
             { value: 'lectures_created', label: 'Lectures Created' },
+            { value: 'courses_created', label: 'Courses Created' },
+            { value: 'lecture_completion_rate', label: 'Lecture Completion Rate' },
+            { value: 'student_engagement', label: 'Student Engagement (min)' },
+            { value: 'quiz_creation', label: 'Quiz Creation' },
+            { value: 'assignment_upload', label: 'Assignment Upload' },
+            { value: 'course_updates', label: 'Course Updates' },
             { value: 'avg_watch_time_pct', label: 'Avg Watch Time %' },
             { value: 'watch_time_pct', label: 'Student Watch %' },
             { value: 'course_completion_days', label: 'Course Completion Days' },
           ]} />
         </div>
         <div className="grid grid-cols-3 gap-3">
-          <Input label="Target" value={target} onChange={setTarget} type="number" />
-          <Select label="Comparison" value={comparison} onChange={(v) => setComparison(v as any)} options={[{ value: 'gte', label: '≥ Target' }, { value: 'lte', label: '≤ Target' }, { value: 'eq', label: '= Target' }]} />
-          <Select label="Period" value={period} onChange={(v) => setPeriod(v as any)} options={[{ value: 'daily', label: 'Daily' }, { value: 'weekly', label: 'Weekly' }, { value: 'monthly', label: 'Monthly' }]} />
+          <Input label="Target" value={target} onChange={(e) => setTarget(e.target.value)} type="number" />
+          <Select label="Comparison" value={comparison} onChange={(e) => setComparison(e.target.value as any)} options={[{ value: 'gte', label: '≥ Target' }, { value: 'lte', label: '≤ Target' }, { value: 'eq', label: '= Target' }]} />
+          <Select label="Period" value={period} onChange={(e) => setPeriod(e.target.value as any)} options={[{ value: 'daily', label: 'Daily' }, { value: 'weekly', label: 'Weekly' }, { value: 'monthly', label: 'Monthly' }]} />
         </div>
-        <Input label="Unit" value={unit} onChange={setUnit} placeholder="lectures, %, days…" />
-        <Textarea label="Description" value={description} onChange={setDescription} rows={2} />
+        <Input label="Unit" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="lectures, %, days…" />
+        <Textarea label="Description" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
         <div className="flex justify-end gap-2 pt-2"><Button variant="ghost" onClick={onClose}>Cancel</Button><Button onClick={save} disabled={saving || !name}>{saving ? 'Saving…' : 'Save'}</Button></div>
       </div>
     </Modal>

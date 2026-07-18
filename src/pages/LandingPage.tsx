@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { GraduationCap, BookOpen, Users, Award, BarChart3, Star, CheckCircle2, ArrowRight, Play, Globe, Zap, Shield, ChevronDown } from 'lucide-react';
+import { GraduationCap, BookOpen, Users, Award, BarChart3, Star, CheckCircle2, ArrowRight, Play, Globe, Zap, Shield, ChevronDown, Menu, X } from 'lucide-react';
 
 const STATS = [
   { label: 'Active Students',   value: '50,000+' },
@@ -47,6 +47,14 @@ const FAQS = [
 
 export default function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  const NAV_LINKS = [
+    { href: '#features', label: 'Features' },
+    { href: '#courses',  label: 'Courses' },
+    { href: '#pricing',  label: 'Pricing' },
+    { href: '#faq',      label: 'FAQ' },
+  ];
 
   return (
     <div className="min-h-screen bg-white font-sans">
@@ -56,18 +64,17 @@ export default function LandingPage({ onGetStarted }: { onGetStarted: () => void
            style={{ background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(20px)' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)' }}>
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)' }}>
               <GraduationCap size={16} className="text-white" />
             </div>
             <span className="font-bold text-slate-900 text-lg tracking-tight">EduNexus</span>
           </div>
           <div className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600">
-            <a href="#features" className="hover:text-primary-600 transition-colors">Features</a>
-            <a href="#courses"  className="hover:text-primary-600 transition-colors">Courses</a>
-            <a href="#pricing"  className="hover:text-primary-600 transition-colors">Pricing</a>
-            <a href="#faq"      className="hover:text-primary-600 transition-colors">FAQ</a>
+            {NAV_LINKS.map((l) => (
+              <a key={l.href} href={l.href} className="hover:text-primary-600 transition-colors">{l.label}</a>
+            ))}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-3">
             <button onClick={onGetStarted} className="text-sm font-semibold text-slate-700 hover:text-primary-600 transition-colors">Sign In</button>
             <button onClick={onGetStarted}
               className="px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95"
@@ -75,7 +82,38 @@ export default function LandingPage({ onGetStarted }: { onGetStarted: () => void
               Get Started Free
             </button>
           </div>
+          <button
+            className="md:hidden p-2 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors"
+            aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
+            onClick={() => setMobileNavOpen((v) => !v)}
+          >
+            {mobileNavOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
         </div>
+
+        {/* Mobile nav panel */}
+        {mobileNavOpen && (
+          <div className="md:hidden border-t border-slate-100 bg-white animate-fade-down">
+            <div className="px-4 sm:px-6 py-4 flex flex-col gap-1">
+              {NAV_LINKS.map((l) => (
+                <a key={l.href} href={l.href} onClick={() => setMobileNavOpen(false)}
+                   className="px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-primary-600 transition-colors">
+                  {l.label}
+                </a>
+              ))}
+              <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-slate-100">
+                <button onClick={onGetStarted} className="px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors text-left">
+                  Sign In
+                </button>
+                <button onClick={onGetStarted}
+                  className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95"
+                  style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', boxShadow: '0 4px 14px rgba(79,70,229,0.35)' }}>
+                  Get Started Free
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* ── Hero ── */}

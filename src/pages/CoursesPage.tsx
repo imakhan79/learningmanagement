@@ -118,7 +118,7 @@ export default function CoursesPage() {
           <EmptyState
             icon={<BookOpen size={28} />}
             title={`No ${tab} courses`}
-            subtitle={role !== 'student' ? 'Create your first course to get started.' : 'No courses available in this category.'}
+            description={role !== 'student' ? 'Create your first course to get started.' : 'No courses available in this category.'}
           />
         </Card>
       ) : (

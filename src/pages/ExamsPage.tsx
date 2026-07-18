@@ -100,7 +100,7 @@ export default function ExamsPage() {
           <EmptyState 
             icon={<ScrollText size={32} className="text-primary-400" />} 
             title="No assessments" 
-            subtitle={role === 'student' ? 'No exams available for your enrolled courses' : 'Create your first exam or quiz'} 
+            description={role === 'student' ? 'No exams available for your enrolled courses' : 'Create your first exam or quiz'}
           />
         </Card>
       ) : (
@@ -235,7 +235,7 @@ function ExamForm({ exam, courses, onClose, onSaved }: { exam: Exam | null; cour
           </div>
           <div>
             <label className="label">Type</label>
-            <Select value={type} onChange={e => setType(e.target.value)}>
+            <Select value={type} onChange={e => setType(e.target.value as 'exam' | 'quiz')}>
               <option value="exam">Formal Exam</option>
               <option value="quiz">Practice Quiz</option>
             </Select>
@@ -701,19 +701,19 @@ function TakeExam({ exam, onClose }: { exam: Exam; onClose: () => void }) {
                     )}
                     
                     {currentQ.type === 'short_answer' && (
-                      <Input 
-                        value={answers[currentQ.id] || ''} 
-                        onChange={(val) => setAnswer(currentQ.id, val)} 
-                        placeholder="Type your answer here..." 
+                      <Input
+                        value={answers[currentQ.id] || ''}
+                        onChange={(e) => setAnswer(currentQ.id, e.target.value)}
+                        placeholder="Type your answer here..."
                         className="text-lg py-4 shadow-inner-soft bg-slate-50 rounded-2xl border-slate-200 focus:bg-white"
                       />
                     )}
-                    
+
                     {currentQ.type === 'essay' && (
-                      <Textarea 
-                        value={answers[currentQ.id] || ''} 
-                        onChange={(val) => setAnswer(currentQ.id, val)} 
-                        rows={10} 
+                      <Textarea
+                        value={answers[currentQ.id] || ''}
+                        onChange={(e) => setAnswer(currentQ.id, e.target.value)}
+                        rows={10}
                         placeholder="Write your detailed response here..." 
                         className="text-base leading-relaxed shadow-inner-soft bg-slate-50 rounded-2xl border-slate-200 focus:bg-white p-5"
                       />
