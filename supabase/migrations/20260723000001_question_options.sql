@@ -9,15 +9,19 @@ CREATE TABLE IF NOT EXISTS question_options (
 
 ALTER TABLE question_options ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "question_options_select" ON question_options;
 CREATE POLICY "question_options_select" ON question_options FOR SELECT
   USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','professor','student')));
 
+DROP POLICY IF EXISTS "question_options_insert" ON question_options;
 CREATE POLICY "question_options_insert" ON question_options FOR INSERT
   WITH CHECK (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','professor')));
 
+DROP POLICY IF EXISTS "question_options_update" ON question_options;
 CREATE POLICY "question_options_update" ON question_options FOR UPDATE
   USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','professor')))
   WITH CHECK (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','professor')));
 
+DROP POLICY IF EXISTS "question_options_delete" ON question_options;
 CREATE POLICY "question_options_delete" ON question_options FOR DELETE
   USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','professor')));

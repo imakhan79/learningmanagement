@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
-import { BarChart3, TrendingUp, Clock, Award, Target, CheckCircle, ClipboardCheck, LogIn } from 'lucide-react';
+import { 
+  BarChart3, TrendingUp, Clock, Award, Target, CheckCircle, 
+  ClipboardCheck, LogIn, Users, FileText, Activity, BookOpen, AlertTriangle
+} from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { StatCard, ChartCard, BarChart, LineChart, DonutChart } from '../components/charts';
@@ -26,203 +29,331 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-slate-800">Analytics</h1>
-        <p className="text-sm text-slate-500">{role === 'admin' ? 'Institution-wide performance' : role === 'professor' ? 'Your teaching analytics' : 'Your learning analytics'}</p>
+        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+          <Activity size={24} className="text-indigo-600" />
+          Analytics Engine
+        </h1>
+        <p className="text-sm text-slate-500 mt-1">
+          {role === 'admin' ? 'Institution-wide metrics and KPIs' : 
+           role === 'professor' ? 'Course performance and student engagement' : 
+           'Your learning progress and performance insights'}
+        </p>
       </div>
       <AnalyticsView role={role} data={data} />
     </div>
   );
 }
 
+// ─── ADMIN ANALYTICS ──────────────────────────────────────────────────────────
 async function loadAdmin(setData: (d: any) => void) {
-  const [profiles, courses, enrollments, attempts, lectures] = await Promise.all([
-    supabase.from('profiles').select('role, status, created_at'),
-    supabase.from('courses').select('status, category'),
-    supabase.from('enrollments').select('status, progress_pct'),
-    supabase.from('exam_attempts').select('score, total_marks, status'),
-    supabase.from('lectures').select('created_at'),
+  // Fetch a broad set of global metrics
+  const [profiles, courses, enrollments, attempts, lectures, logins] = await Promise.all([
+    supabase.from('profiles').select('id, role, status, created_at'),
+    supabase.from('courses').select('id, status, category'),
+    supabase.from('enrollments').select('id, status, progress_pct, enrolled_at'),
+    supabase.from('exam_attempts').select('score, total_marks, status, started_at'),
+    supabase.from('lectures').select('id, created_at'),
+    supabase.from('login_events').select('user_id, login_at').gte('login_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
   ]);
+
   const p = profiles.data || [];
-  const roleDist = { admin: 0, professor: 0, student: 0 };
-  p.forEach((x) => (roleDist[x.role as keyof typeof roleDist]++));
   const c = courses.data || [];
-  const catDist: Record<string, number> = {};
-  c.forEach((x) => (catDist[x.category] = (catDist[x.category] || 0) + 1));
   const enr = enrollments.data || [];
   const att = attempts.data || [];
-  const avgScore = att.length ? att.reduce((s, a) => s + (a.score || 0), 0) / att.length : 0;
-  const passRate = att.length ? (att.filter((a) => a.total_marks > 0 && a.score / a.total_marks >= 0.5).length / att.length) * 100 : 0;
-  const completionRate = enr.length ? (enr.filter((e) => e.status === 'completed').length / enr.length) * 100 : 0;
-  // lectures per month (last 6)
+  
+  // Active metrics
+  const activeUsers = new Set((logins.data || []).map(l => l.user_id));
+  const activeStudents = p.filter(x => x.role === 'student' && activeUsers.has(x.id)).length;
+  const activeProfessors = p.filter(x => x.role === 'professor' && activeUsers.has(x.id)).length;
+  const activeCourses = c.filter(x => x.status === 'published').length;
+
+  // Success & Completion Rates
+  const completedEnr = enr.filter(e => e.status === 'completed' || e.progress_pct === 100).length;
+  const completionRate = enr.length ? (completedEnr / enr.length) * 100 : 0;
+  
+  const passedAttempts = att.filter(a => a.total_marks > 0 && (a.score / a.total_marks) >= 0.5).length;
+  const successRate = att.length ? (passedAttempts / att.length) * 100 : 0;
+
+  // Engagement Score (Global heuristic: active loggers + test takers / total students)
+  const totalStudents = p.filter(x => x.role === 'student').length;
+  const engagementScore = totalStudents ? (activeStudents / totalStudents) * 100 : 0;
+
+  // Category Distribution
+  const catDist: Record<string, number> = {};
+  c.forEach(x => (catDist[x.category || 'General'] = (catDist[x.category || 'General'] || 0) + 1));
+
+  // Platform Growth (Last 6 months)
   const months: string[] = [];
   const now = new Date();
-  for (let i = 5; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push(d.toLocaleString(undefined, { month: 'short' })); }
-  const lecByMonth = months.map((m, i) => {
+  for (let i = 5; i >= 0; i--) { 
+    months.push(new Date(now.getFullYear(), now.getMonth() - i, 1).toLocaleString(undefined, { month: 'short' })); 
+  }
+  
+  const growthByMonth = months.map((m, i) => {
     const start = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
     const end = new Date(now.getFullYear(), now.getMonth() - (4 - i), 1);
-    return { label: m, value: (lectures.data || []).filter((l) => { const d = new Date(l.created_at); return d >= start && d < end; }).length };
+    return { 
+      label: m, 
+      Users: p.filter(x => new Date(x.created_at) >= start && new Date(x.created_at) < end).length,
+      Enrollments: enr.filter(x => new Date(x.enrolled_at) >= start && new Date(x.enrolled_at) < end).length
+    };
   });
-  setData({ roleDist, catDist: Object.entries(catDist).map(([label, value]) => ({ label, value })), avgScore: Math.round(avgScore), passRate: Math.round(passRate), completionRate: Math.round(completionRate), totalLectures: (lectures.data || []).length, lecByMonth, activeUsers: p.filter((x) => x.status === 'active').length });
+
+  setData({
+    activeStudents, activeProfessors, activeCourses,
+    completionRate: Math.round(completionRate),
+    successRate: Math.round(successRate),
+    engagementScore: Math.round(engagementScore),
+    catDist: Object.entries(catDist).map(([label, value]) => ({ label, value })),
+    growthByMonth
+  });
 }
 
+// ─── PROFESSOR ANALYTICS ──────────────────────────────────────────────────────
 async function loadProf(setData: (d: any) => void, profId: string) {
   const { data: courses } = await supabase.from('courses').select('id, title').eq('professor_id', profId);
-  const ids = (courses || []).map((c) => c.id);
+  const ids = (courses || []).map(c => c.id);
+  
   if (!ids.length) { setData({}); return; }
-  const [lectures, enrollments, materials, attempts] = await Promise.all([
+
+  const [lectures, enrollments, materials, attempts, progress] = await Promise.all([
     supabase.from('lectures').select('id, created_at').in('course_id', ids),
     supabase.from('enrollments').select('student_id, progress_pct, status').in('course_id', ids),
-    supabase.from('course_materials').select('type, created_at').in('course_id', ids),
-    supabase.from('exam_attempts').select('score, total_marks').in('exam_id',
-      ((await supabase.from('exams').select('id').in('course_id', ids)).data || []).map((e) => e.id)
+    supabase.from('course_materials').select('type, created_at, id').in('course_id', ids),
+    supabase.from('exam_attempts').select('score, total_marks, time_spent_seconds').in('exam_id', 
+      ((await supabase.from('exams').select('id').in('course_id', ids)).data || []).map(e => e.id)
     ),
+    supabase.from('lecture_progress').select('completion_pct, total_watch_seconds').in('lecture_id', 
+      ((await supabase.from('lectures').select('id').in('course_id', ids)).data || []).map(l => l.id)
+    )
   ]);
-  const matByType: Record<string, number> = {};
-  (materials.data || []).forEach((m) => (matByType[m.type] = (matByType[m.type] || 0) + 1));
+
   const enr = enrollments.data || [];
-  const avgProgress = enr.length ? enr.reduce((s, e) => s + (e.progress_pct || 0), 0) / enr.length : 0;
   const att = attempts.data || [];
-  const avgScore = att.length ? att.reduce((s, a) => s + (a.score || 0), 0) / att.length : 0;
+  const prog = progress.data || [];
+  const mats = materials.data || [];
+
+  // Lecture Completion & Watch Time
+  const avgLecCompletion = prog.length ? prog.reduce((s, p) => s + (p.completion_pct || 0), 0) / prog.length : 0;
+  const totalWatchSecs = prog.reduce((s, p) => s + (p.total_watch_seconds || 0), 0);
+  const avgWatchMins = prog.length ? (totalWatchSecs / prog.length) / 60 : 0;
+
+  // Content Utilization
+  const matByType: Record<string, number> = {};
+  mats.forEach(m => (matByType[m.type] = (matByType[m.type] || 0) + 1));
+
+  // Student Engagement (Composite)
+  // Formula: (Avg Progress + Avg Lec Completion) / 2
+  const avgProgress = enr.length ? enr.reduce((s, e) => s + (e.progress_pct || 0), 0) / enr.length : 0;
+  const engagementScore = (avgProgress + avgLecCompletion) / 2;
+
+  // Lecture Upload Trends (Last 6 months)
   const months: string[] = [];
   const now = new Date();
-  for (let i = 5; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push(d.toLocaleString(undefined, { month: 'short' })); }
+  for (let i = 5; i >= 0; i--) { 
+    months.push(new Date(now.getFullYear(), now.getMonth() - i, 1).toLocaleString(undefined, { month: 'short' })); 
+  }
   const lecByMonth = months.map((m, i) => {
     const start = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
     const end = new Date(now.getFullYear(), now.getMonth() - (4 - i), 1);
-    return { label: m, value: (lectures.data || []).filter((l) => { const d = new Date(l.created_at); return d >= start && d < end; }).length };
+    return { 
+      label: m, 
+      value: (lectures.data || []).filter(l => new Date(l.created_at) >= start && new Date(l.created_at) < end).length 
+    };
   });
-  setData({ courses: courses?.length || 0, lectures: (lectures.data || []).length, students: new Set(enr.map((e) => e.student_id)).size, avgProgress: Math.round(avgProgress), avgScore: Math.round(avgScore), matByType: Object.entries(matByType).map(([label, value]) => ({ label, value })), lecByMonth });
+
+  setData({
+    totalStudents: new Set(enr.map(e => e.student_id)).size,
+    avgProgress: Math.round(avgProgress),
+    engagementScore: Math.round(engagementScore),
+    avgLecCompletion: Math.round(avgLecCompletion),
+    avgWatchMins: Math.round(avgWatchMins),
+    matByType: Object.entries(matByType).map(([label, value]) => ({ label, value })),
+    lecByMonth
+  });
 }
 
+// ─── STUDENT ANALYTICS ────────────────────────────────────────────────────────
 async function loadStudent(setData: (d: any) => void, studentId: string) {
-  const [enr, prog, att, watch, attendance, assignments, logins] = await Promise.all([
-    supabase.from('enrollments').select('progress_pct, status, course:courses(title), course_id').eq('student_id', studentId),
-    supabase.from('lecture_progress').select('completion_pct, total_watch_seconds, completed_at, created_at').eq('student_id', studentId),
-    supabase.from('exam_attempts').select('score, total_marks, status, exam:exams(title)').eq('student_id', studentId),
-    supabase.from('watch_events').select('event_type, created_at').eq('student_id', studentId).order('created_at', { ascending: true }).limit(500),
-    supabase.from('lecture_attendance').select('status, attended_at').eq('student_id', studentId),
-    supabase.from('assignment_progress').select('score, status, updated_at').eq('student_id', studentId),
-    supabase.from('login_events').select('login_at').eq('user_id', studentId),
+  const [enr, prog, att, attendance, responses] = await Promise.all([
+    supabase.from('enrollments').select('progress_pct, status, course:courses(title), enrolled_at').eq('student_id', studentId),
+    supabase.from('lecture_progress').select('total_watch_seconds, completed_at, created_at').eq('student_id', studentId),
+    supabase.from('exam_attempts').select('score, total_marks, exam:exams(type)').eq('student_id', studentId),
+    supabase.from('lecture_attendance').select('status').eq('student_id', studentId),
+    supabase.from('exam_responses').select('is_correct, question:question_bank(subject, topic)').eq('student_id', studentId) // Assuming we join attempt to get student_id, simplified here by fetching all responses via attempt join in real app.
   ]);
+
+  // For real app, fetching weak topics requires joining attempts and responses:
+  const { data: realResponses } = await supabase
+    .from('exam_responses')
+    .select('is_correct, attempt:exam_attempts!inner(student_id), question:question_bank(subject, topic)')
+    .eq('attempt.student_id', studentId);
+
   const e = enr.data || [];
   const p = prog.data || [];
   const a = att.data || [];
-  const totalWatch = p.reduce((s, x) => s + (x.total_watch_seconds || 0), 0);
-  const avgProgress = e.length ? e.reduce((s, x) => s + (x.progress_pct || 0), 0) / e.length : 0;
-  const avgScore = a.length ? a.reduce((s, x) => s + (x.score || 0), 0) / a.length : 0;
-  const passed = a.filter((x) => x.total_marks > 0 && x.score / x.total_marks >= 0.5).length;
-  // watch activity last 7 days
-  const days: string[] = [];
+  const r = realResponses || [];
+
+  // Learning Hours
+  const totalWatchSecs = p.reduce((s, x) => s + (x.total_watch_seconds || 0), 0);
+  const learningHours = (totalWatchSecs / 3600).toFixed(1);
+
+  // Attendance
+  const attTotal = attendance.data?.length || 0;
+  const attPresent = attendance.data?.filter(x => x.status === 'present').length || 0;
+  const attendanceRate = attTotal ? (attPresent / attTotal) * 100 : 0;
+
+  // Quiz vs Exam Scores
+  const quizzes = a.filter(x => x.exam?.type === 'quiz');
+  const exams = a.filter(x => x.exam?.type === 'exam');
+  
+  const avgQuiz = quizzes.length ? quizzes.reduce((s, q) => s + (q.score / (q.total_marks || 1)), 0) / quizzes.length * 100 : 0;
+  const avgExam = exams.length ? exams.reduce((s, ex) => s + (ex.score / (ex.total_marks || 1)), 0) / exams.length * 100 : 0;
+
+  // Progress Trends (Cumulative completion over last 6 months)
+  const months: string[] = [];
   const now = new Date();
-  for (let i = 6; i >= 0; i--) { const d = new Date(now); d.setDate(d.getDate() - i); days.push(d.toLocaleString(undefined, { weekday: 'short' })); }
-  const watchByDay = days.map((d, i) => {
-    const dayStart = new Date(now);
-    dayStart.setDate(dayStart.getDate() - (6 - i));
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setDate(dayEnd.getDate() + 1);
-    return { label: d, value: (watch.data || []).filter((w: any) => {
-      const t = new Date(w.created_at);
-      return t >= dayStart && t < dayEnd;
-    }).length };
+  for (let i = 5; i >= 0; i--) { 
+    months.push(new Date(now.getFullYear(), now.getMonth() - i, 1).toLocaleString(undefined, { month: 'short' })); 
+  }
+  let cumulativeWatch = 0;
+  const progressTrends = months.map((m, i) => {
+    const end = new Date(now.getFullYear(), now.getMonth() - (4 - i), 1);
+    const mWatch = p.filter(x => new Date(x.created_at) < end).reduce((s, x) => s + (x.total_watch_seconds || 0) / 3600, 0);
+    return { label: m, Hours: Math.round(mWatch * 10) / 10 };
   });
-  // attendance rate (present count / total)
-  const attendanceRate = attendance.data && attendance.data.length ? (attendance.data.filter((x: any) => x.status === 'present').length / attendance.data.length) * 100 : 0;
-  // average assignment score
-  const assignmentAvg = assignments.data && assignments.data.length ? assignments.data.reduce((s: number, cur: any) => s + (cur.score || 0), 0) / assignments.data.length : 0;
-  // login counts
-  const loginCountDaily = (logins.data || []).filter((l: any) => {
-    const d = new Date(l.login_at);
-    const today = new Date();
-    return d.toDateString() === today.toDateString();
-  }).length;
-  const loginCountWeekly = (logins.data || []).filter((l: any) => {
-    const d = new Date(l.login_at);
-    const diff = (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
-    return diff <= 7;
-  }).length;
+
+  // Weak Topics
+  const topicStats: Record<string, { correct: number, total: number }> = {};
+  r.forEach((resp: any) => {
+    const q = resp.question;
+    if (!q) return;
+    const topic = q.topic || q.subject || 'General';
+    if (!topicStats[topic]) topicStats[topic] = { correct: 0, total: 0 };
+    topicStats[topic].total += 1;
+    if (resp.is_correct) topicStats[topic].correct += 1;
+  });
+
+  const weakTopics = Object.entries(topicStats)
+    .map(([label, stats]) => ({
+      label,
+      score: Math.round((stats.correct / stats.total) * 100)
+    }))
+    .sort((a, b) => a.score - b.score) // lowest first
+    .slice(0, 5); // top 5 weakest
+
   setData({
-    courses: e.length,
-    avgProgress: Math.round(avgProgress),
-    avgScore: Math.round(avgScore),
-    passed,
-    attempts: a.length,
-    totalWatchHours: Math.round((totalWatch / 3600) * 10) / 10,
-    completedLectures: p.filter((x: any) => x.completed_at).length,
-    watchByDay,
-    courseList: e.map((x: any) => ({ title: x.course?.title, progress: x.progress_pct, status: x.status })),
+    learningHours,
     attendanceRate: Math.round(attendanceRate),
-    assignmentAvg: Math.round(assignmentAvg),
-    loginCount: loginCountDaily,
-    loginCountWeekly,
+    avgQuiz: Math.round(avgQuiz),
+    avgExam: Math.round(avgExam),
+    courseCount: e.length,
+    completedCourses: e.filter(x => x.status === 'completed' || x.progress_pct === 100).length,
+    progressTrends,
+    weakTopics
   });
 }
 
+// ─── VIEW COMPONENT ───────────────────────────────────────────────────────────
 function AnalyticsView({ role, data }: { role: string; data: any }) {
   if (role === 'admin') {
     return (
-      <>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Active Users" value={data.activeUsers} icon={<TrendingUp size={20} />} color="emerald" />
-          <StatCard label="Total Lectures" value={data.totalLectures} icon={<Clock size={20} />} color="sky" />
-          <StatCard label="Pass Rate" value={`${data.passRate}%`} icon={<Award size={20} />} color="amber" />
-          <StatCard label="Completion Rate" value={`${data.completionRate}%`} icon={<Target size={20} />} color="violet" />
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <StatCard label="Active Students" value={data.activeStudents} icon={<Users size={18} />} color="indigo" />
+          <StatCard label="Active Profs" value={data.activeProfessors} icon={<ClipboardCheck size={18} />} color="sky" />
+          <StatCard label="Active Courses" value={data.activeCourses} icon={<BookOpen size={18} />} color="violet" />
+          <StatCard label="Completion Rate" value={`${data.completionRate}%`} icon={<Target size={18} />} color="emerald" />
+          <StatCard label="Success Rate" value={`${data.successRate}%`} icon={<Award size={18} />} color="amber" />
+          <StatCard label="Engagement" value={`${data.engagementScore}/100`} icon={<Activity size={18} />} color="rose" />
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <ChartCard title="Users by Role"><DonutChart segments={[
-            { label: 'Students', value: data.roleDist?.student || 0, color: '#0ea5e9' },
-            { label: 'Professors', value: data.roleDist?.professor || 0, color: '#10b981' },
-            { label: 'Admins', value: data.roleDist?.admin || 0, color: '#f59e0b' },
-          ]} /></ChartCard>
-          <ChartCard title="Courses by Category"><BarChart data={data.catDist || []} color="#8b5cf6" /></ChartCard>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <ChartCard title="Platform Growth (Users & Enrollments)">
+              <BarChart data={data.growthByMonth || []} color="#4f46e5" />
+            </ChartCard>
+          </div>
+          <div>
+            <ChartCard title="Courses by Category">
+              <DonutChart segments={(data.catDist || []).map((d: any, i: number) => ({
+                label: d.label, value: d.value, color: ['#4f46e5', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'][i % 5]
+              }))} />
+            </ChartCard>
+          </div>
         </div>
-        <ChartCard title="Lectures Created (6 months)"><LineChart data={data.lecByMonth || []} /></ChartCard>
-      </>
+      </div>
     );
   }
+
   if (role === 'professor') {
     return (
-      <>
+      <div className="space-y-6">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Courses" value={data.courses} icon={<BarChart3 size={20} />} color="sky" />
-          <StatCard label="Lectures" value={data.lectures} icon={<Clock size={20} />} color="emerald" />
-          <StatCard label="Students" value={data.students} icon={<TrendingUp size={20} />} color="violet" />
-          <StatCard label="Avg Score" value={data.avgScore} icon={<Award size={20} />} color="amber" />
+          <StatCard label="Student Engagement" value={`${data.engagementScore}/100`} icon={<Activity size={20} />} color="rose" />
+          <StatCard label="Avg Lec. Completion" value={`${data.avgLecCompletion}%`} icon={<CheckCircle size={20} />} color="emerald" />
+          <StatCard label="Avg Watch Time" value={`${data.avgWatchMins}m`} icon={<Clock size={20} />} color="indigo" />
+          <StatCard label="Total Students" value={data.totalStudents} icon={<Users size={20} />} color="sky" />
         </div>
-        <ChartCard title="Avg Student Progress"><div className="flex items-center gap-4"><div className="text-3xl font-bold text-slate-800">{data.avgProgress}%</div><ProgressBar value={data.avgProgress} className="flex-1" /></div></ChartCard>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <ChartCard title="Materials by Type"><BarChart data={data.matByType || []} /></ChartCard>
-          <ChartCard title="Lectures Created (6 months)"><LineChart data={data.lecByMonth || []} color="#10b981" /></ChartCard>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <ChartCard title="Content Utilization (by Type)">
+            <DonutChart segments={(data.matByType || []).map((d: any, i: number) => ({
+              label: d.label.toUpperCase(), value: d.value, color: ['#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#3b82f6'][i % 5]
+            }))} />
+          </ChartCard>
+          <ChartCard title="Lecture Upload Trends">
+            <LineChart data={data.lecByMonth || []} color="#8b5cf6" />
+          </ChartCard>
         </div>
-      </>
+      </div>
     );
   }
+
+  // Student Role
   return (
-    <>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Courses" value={data.courses} icon={<BarChart3 size={20} />} color="sky" />
-        <StatCard label="Completed Lectures" value={data.completedLectures} icon={<Target size={20} />} color="emerald" />
-        <StatCard label="Watch Hours" value={data.totalWatchHours} icon={<Clock size={20} />} color="violet" />
-        <StatCard label="Exams Passed" value={`${data.passed}/${data.attempts}`} icon={<Award size={20} />} color="amber" />
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <StatCard label="Learning Hours" value={data.learningHours} icon={<Clock size={18} />} color="indigo" />
+        <StatCard label="Attendance" value={`${data.attendanceRate}%`} icon={<CheckCircle size={18} />} color="emerald" />
+        <StatCard label="Enrolled Courses" value={data.courseCount} icon={<BookOpen size={18} />} color="sky" />
+        <StatCard label="Completed" value={data.completedCourses} icon={<Target size={18} />} color="violet" />
+        <StatCard label="Avg Quiz Score" value={`${data.avgQuiz}%`} icon={<ClipboardCheck size={18} />} color="amber" />
+        <StatCard label="Avg Exam Score" value={`${data.avgExam}%`} icon={<Award size={18} />} color="rose" />
       </div>
-      <ChartCard title="Course Progress">
-        <div className="space-y-3">
-          {(data.courseList || []).map((c: any, i: number) => (
-            <div key={i} className="flex items-center gap-3">
-              <div className="flex-1"><div className="flex justify-between mb-1"><span className="text-sm text-slate-700">{c.title}</span><Badge color={c.status === 'completed' ? 'green' : 'blue'}>{c.status}</Badge></div><ProgressBar value={c.progress || 0} /></div>
-              <span className="text-sm font-semibold text-slate-600 w-12 text-right">{Math.round(c.progress || 0)}%</span>
-            </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-            <StatCard label="Attendance Rate" value={`${data.attendanceRate}%`} icon={<CheckCircle size={20} />} color="teal" />
-            <StatCard label="Avg Assignment Score" value={data.assignmentAvg} icon={<ClipboardCheck size={20} />} color="rose" />
-            <StatCard label="Logins (Daily)" value={data.loginCount} icon={<LogIn size={20} />} color="indigo" />
-            <StatCard label="Logins (Weekly)" value={data.loginCountWeekly} icon={<LogIn size={20} />} color="indigo" />
-          </div>
-          ))}
-          {(!data.courseList || data.courseList.length === 0) && <p className="text-sm text-slate-400 text-center py-4">No courses</p>}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <ChartCard title="Progress Trends (Learning Hours)">
+            <LineChart data={data.progressTrends || []} color="#4f46e5" />
+          </ChartCard>
         </div>
-      </ChartCard>
-      <ChartCard title="Watch Activity (7 days)"><LineChart data={data.watchByDay || []} color="#8b5cf6" /></ChartCard>
-    </>
+        <div>
+          <ChartCard title="Areas for Improvement">
+            <div className="space-y-4">
+              {(data.weakTopics || []).map((wt: any, idx: number) => (
+                <div key={idx} className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <div className="flex justify-between mb-1">
+                      <span className="text-sm font-medium text-slate-700">{wt.label}</span>
+                      <span className="text-xs font-bold text-rose-600">{wt.score}%</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-2">
+                      <div className="bg-rose-500 h-2 rounded-full" style={{ width: `${Math.max(wt.score, 5)}%` }}></div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {(!data.weakTopics || data.weakTopics.length === 0) && (
+                <div className="flex flex-col items-center justify-center py-8 text-slate-400">
+                  <AlertTriangle size={32} className="mb-2 opacity-50 text-emerald-500" />
+                  <p className="text-sm text-center">No weak topics identified yet.<br/>Keep taking quizzes!</p>
+                </div>
+              )}
+            </div>
+          </ChartCard>
+        </div>
+      </div>
+    </div>
   );
 }

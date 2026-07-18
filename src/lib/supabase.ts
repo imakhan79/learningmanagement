@@ -115,6 +115,8 @@ export interface QuestionBankItem {
   subject: string;
   course_id: string | null;
   topic: string;
+  category: string | null;
+  tags: string[];
   difficulty: 'easy' | 'medium' | 'hard';
   type: 'mcq' | 'true_false' | 'multiple_select' | 'short_answer' | 'essay';
   question_text: string;
@@ -123,8 +125,11 @@ export interface QuestionBankItem {
   explanation: string;
   marks: number;
   time_seconds: number;
-  status: 'active' | 'archived';
+  status: 'draft' | 'submitted' | 'approved' | 'archived';
   created_by: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  submitted_at: string | null;
   created_at: string;
   updated_at: string;
 }
