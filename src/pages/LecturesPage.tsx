@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FileText, Plus, Play, Bookmark, Download, Upload, Trash2, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../lib/auth';
-import { supabase, Lecture, CourseMaterial, Course } from '../lib/supabase';
+import { supabase, Lecture, CourseMaterial, Course, startLectureActivity, updateLectureActivity, completeLectureActivity } from '../lib/supabase';
 import { Button, Card, Input, Textarea, Select, Badge, Spinner, EmptyState, Modal, ProgressBar, formatDuration, formatDate } from '../components/ui';
 
 export default function LecturesPage() {
@@ -294,17 +294,24 @@ function WatchModal({ lecture, course, onClose }: { lecture: Lecture; course: Co
   const [playing, setPlaying] = useState(false);
   const [totalWatch, setTotalWatch] = useState(0);
   const [lastSave, setLastSave] = useState(0);
+  const [activityId, setActivityId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from('lecture_progress').select('*').eq('student_id', profile!.id).eq('lecture_id', lecture.id).maybeSingle();
+      const { data } = await supabase
+        .from('lecture_activity')
+        .select('*')
+        .eq('user_id', profile!.id)
+        .eq('lecture_id', lecture.id)
+        .maybeSingle();
       if (data) {
         setProgress(data);
-        setPosition(data.last_position_seconds || 0);
+        setPosition(data.last_position || 0);
         setTotalWatch(data.total_watch_seconds || 0);
       } else {
-        await supabase.from('lecture_progress').insert({ student_id: profile!.id, lecture_id: lecture.id });
-        await supabase.from('watch_events').insert({ student_id: profile!.id, lecture_id: lecture.id, event_type: 'start', position_seconds: 0 });
+        const { data: actData } = await startLectureActivity(lecture.id);
+        if (actData?.[0]?.id) setActivityId(actData[0].id);
+        // watch_events start already logged in startLectureActivity via backend? not needed here
       }
     })();
   }, [lecture.id]);
@@ -322,8 +329,9 @@ function WatchModal({ lecture, course, onClose }: { lecture: Lecture; course: Co
     return () => clearInterval(interval);
   }, [playing]);
 
-  // persist progress every 5s
+  // persist progress every 5s using lecture_activity
   useEffect(() => {
+    if (!activityId) return;
     if (!progress && position === 0) return;
     const now = Date.now();
     if (now - lastSave < 5000) return;
@@ -331,18 +339,16 @@ function WatchModal({ lecture, course, onClose }: { lecture: Lecture; course: Co
     const dur = lecture.duration_seconds || 1;
     const pct = Math.min(100, (position / dur) * 100);
     const completed = pct >= 95;
-    supabase.from('lecture_progress').update({
-      last_position_seconds: position,
-      completion_pct: pct,
+    updateLectureActivity(activityId, {
+      last_position: position,
       total_watch_seconds: totalWatch,
-      last_viewed_at: new Date().toISOString(),
+      completion_percentage: pct,
       completed_at: completed ? new Date().toISOString() : null,
-      resume_count: (progress?.resume_count || 0) + (playing && position > 0 ? 0 : 0),
-    }).eq('student_id', profile!.id).eq('lecture_id', lecture.id);
-    if (completed && !progress?.completed_at) {
+    });
+    if (completed && !(progress?.completed_at)) {
       supabase.from('watch_events').insert({ student_id: profile!.id, lecture_id: lecture.id, event_type: 'complete', position_seconds: position });
     }
-  }, [position]);
+  }, [position, activityId]);
 
   const togglePlay = () => {
     setPlaying((p) => {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BarChart3, TrendingUp, Clock, Award, Target } from 'lucide-react';
+import { BarChart3, TrendingUp, Clock, Award, Target, CheckCircle, ClipboardCheck, LogIn } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { StatCard, ChartCard, BarChart, LineChart, DonutChart } from '../components/charts';
@@ -95,11 +95,14 @@ async function loadProf(setData: (d: any) => void, profId: string) {
 }
 
 async function loadStudent(setData: (d: any) => void, studentId: string) {
-  const [enr, prog, att, watch] = await Promise.all([
-    supabase.from('enrollments').select('progress_pct, status, course:courses(title)').eq('student_id', studentId),
+  const [enr, prog, att, watch, attendance, assignments, logins] = await Promise.all([
+    supabase.from('enrollments').select('progress_pct, status, course:courses(title), course_id').eq('student_id', studentId),
     supabase.from('lecture_progress').select('completion_pct, total_watch_seconds, completed_at, created_at').eq('student_id', studentId),
     supabase.from('exam_attempts').select('score, total_marks, status, exam:exams(title)').eq('student_id', studentId),
     supabase.from('watch_events').select('event_type, created_at').eq('student_id', studentId).order('created_at', { ascending: true }).limit(500),
+    supabase.from('lecture_attendance').select('status, attended_at').eq('student_id', studentId),
+    supabase.from('assignment_progress').select('score, status, updated_at').eq('student_id', studentId),
+    supabase.from('login_events').select('login_at').eq('user_id', studentId),
   ]);
   const e = enr.data || [];
   const p = prog.data || [];
@@ -113,11 +116,46 @@ async function loadStudent(setData: (d: any) => void, studentId: string) {
   const now = new Date();
   for (let i = 6; i >= 0; i--) { const d = new Date(now); d.setDate(d.getDate() - i); days.push(d.toLocaleString(undefined, { weekday: 'short' })); }
   const watchByDay = days.map((d, i) => {
-    const dayStart = new Date(now); dayStart.setDate(dayStart.getDate() - (6 - i)); dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
-    return { label: d, value: (watch.data || []).filter((w) => { const t = new Date(w.created_at); return t >= dayStart && t < dayEnd; }).length };
+    const dayStart = new Date(now);
+    dayStart.setDate(dayStart.getDate() - (6 - i));
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setDate(dayEnd.getDate() + 1);
+    return { label: d, value: (watch.data || []).filter((w: any) => {
+      const t = new Date(w.created_at);
+      return t >= dayStart && t < dayEnd;
+    }).length };
   });
-  setData({ courses: e.length, avgProgress: Math.round(avgProgress), avgScore: Math.round(avgScore), passed, attempts: a.length, totalWatchHours: Math.round((totalWatch / 3600) * 10) / 10, completedLectures: p.filter((x) => x.completed_at).length, watchByDay, courseList: e.map((x: any) => ({ title: x.course?.title, progress: x.progress_pct, status: x.status })) });
+  // attendance rate (present count / total)
+  const attendanceRate = attendance.data && attendance.data.length ? (attendance.data.filter((x: any) => x.status === 'present').length / attendance.data.length) * 100 : 0;
+  // average assignment score
+  const assignmentAvg = assignments.data && assignments.data.length ? assignments.data.reduce((s: number, cur: any) => s + (cur.score || 0), 0) / assignments.data.length : 0;
+  // login counts
+  const loginCountDaily = (logins.data || []).filter((l: any) => {
+    const d = new Date(l.login_at);
+    const today = new Date();
+    return d.toDateString() === today.toDateString();
+  }).length;
+  const loginCountWeekly = (logins.data || []).filter((l: any) => {
+    const d = new Date(l.login_at);
+    const diff = (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
+    return diff <= 7;
+  }).length;
+  setData({
+    courses: e.length,
+    avgProgress: Math.round(avgProgress),
+    avgScore: Math.round(avgScore),
+    passed,
+    attempts: a.length,
+    totalWatchHours: Math.round((totalWatch / 3600) * 10) / 10,
+    completedLectures: p.filter((x: any) => x.completed_at).length,
+    watchByDay,
+    courseList: e.map((x: any) => ({ title: x.course?.title, progress: x.progress_pct, status: x.status })),
+    attendanceRate: Math.round(attendanceRate),
+    assignmentAvg: Math.round(assignmentAvg),
+    loginCount: loginCountDaily,
+    loginCountWeekly,
+  });
 }
 
 function AnalyticsView({ role, data }: { role: string; data: any }) {
@@ -174,6 +212,12 @@ function AnalyticsView({ role, data }: { role: string; data: any }) {
               <div className="flex-1"><div className="flex justify-between mb-1"><span className="text-sm text-slate-700">{c.title}</span><Badge color={c.status === 'completed' ? 'green' : 'blue'}>{c.status}</Badge></div><ProgressBar value={c.progress || 0} /></div>
               <span className="text-sm font-semibold text-slate-600 w-12 text-right">{Math.round(c.progress || 0)}%</span>
             </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+            <StatCard label="Attendance Rate" value={`${data.attendanceRate}%`} icon={<CheckCircle size={20} />} color="teal" />
+            <StatCard label="Avg Assignment Score" value={data.assignmentAvg} icon={<ClipboardCheck size={20} />} color="rose" />
+            <StatCard label="Logins (Daily)" value={data.loginCount} icon={<LogIn size={20} />} color="indigo" />
+            <StatCard label="Logins (Weekly)" value={data.loginCountWeekly} icon={<LogIn size={20} />} color="indigo" />
+          </div>
           ))}
           {(!data.courseList || data.courseList.length === 0) && <p className="text-sm text-slate-400 text-center py-4">No courses</p>}
         </div>

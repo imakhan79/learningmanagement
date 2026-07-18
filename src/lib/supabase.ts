@@ -208,3 +208,144 @@ export interface AuditLog {
   details: Record<string, any>;
   created_at: string;
 }
+
+export interface LectureAttachment {
+  id: string;
+  lecture_id: string;
+  type: 'video' | 'pdf' | 'book' | 'worksheet' | 'reference';
+  url: string;
+  title: string;
+  size_bytes: number;
+  duration_seconds: number;
+  created_at: string;
+}
+
+// Lecture API
+export const createLecture = async (data: Lecture) => supabase.from('lectures').insert(data);
+export const updateLecture = async (id: string, data: Partial<Lecture>) => supabase.from('lectures').update(data).eq('id', id);
+export const uploadLectureAttachment = async (lectureId: string, attachment: LectureAttachment) =>
+  supabase.from('lecture_attachments').insert({
+    lecture_id: lectureId,
+    type: attachment.type,
+    url: attachment.url,
+    title: attachment.title,
+    size_bytes: attachment.size_bytes,
+    duration_seconds: attachment.duration_seconds,
+  });
+
+export const getLecture = async (lectureId: string) => supabase.from('lectures').select('*').eq('id', lectureId).single();
+export const getLectureAttachments = async (lectureId: string) => supabase.from('lecture_attachments').select('*').eq('lecture_id', lectureId);
+
+export const bookmarkLecture = async (lectureId: string) =>
+  supabase.from('bookmarks').insert({ lecture_id: lectureId, student_id: supabase.auth.user()?.id });
+
+export const resumeLecture = async (lectureId: string, position: number) =>
+  supabase.from('lecture_progress').upsert({
+    lecture_id: lectureId,
+    student_id: supabase.auth.user()?.id,
+    last_position_seconds: position,
+  }, { onConflict: ['lecture_id', 'student_id'] });
+
+// Lecture Activity Tracking
+export interface StudentAnalytics {
+  id: string;
+  student_id: string;
+  course_id: string;
+  engagement_score: number;
+  last_activity_at: string;
+}
+
+export interface LectureAttendance {
+  id: string;
+  lecture_id: string;
+  student_id: string;
+  attended_at: string;
+}
+
+export interface QuizAttempt {
+  id: string;
+  quiz_id: string;
+  student_id: string;
+  score: number;
+  completed_at: string;
+}
+
+export interface ExamScore {
+  id: string;
+  exam_id: string;
+  student_id: string;
+  marks_obtained: number;
+  total_marks: number;
+}
+
+export interface AssignmentProgress {
+  id: string;
+  assignment_id: string;
+  student_id: string;
+  status: 'not_started' | 'in_progress' | 'completed';
+  updated_at: string;
+}
+
+export interface LoginEvent {
+  id: string;
+  user_id: string;
+  ip_address: string;
+  login_at: string;
+}
+
+export const logStudentLogin = async (userId: string, ip: string) => supabase.from('login_events').insert({ user_id: userId, ip_address: ip });
+export const getStudentAnalytics = async (studentId: string) => supabase.from('student_analytics').select('*').eq('student_id', studentId);
+export const recordLectureAttendance = async (data: LectureAttendance) => supabase.from('lecture_attendance').insert(data);
+export const submitQuizAttempt = async (data: QuizAttempt) => supabase.from('quiz_attempts').insert(data);
+export const updateAssignmentProgress = async (id: string, status: string) => supabase.from('assignment_progress').update({ status }).eq('id', id);
+
+export interface LectureActivity {
+  id: string;
+  user_id: string;
+  lecture_id: string;
+  started_at: string;
+  last_position: number; // seconds into the video
+  total_watch_seconds: number;
+  pause_count: number;
+  resume_count: number;
+  bookmark_count: number;
+  completed_at: string | null;
+  completion_percentage: number;
+}
+
+/** Start tracking a lecture for the current user */
+export const startLectureActivity = async (lectureId: string) => {
+  const { data, error } = await supabase.from('lecture_activity').insert({
+    lecture_id: lectureId,
+    user_id: supabase.auth.user()?.id,
+  });
+  return { data, error };
+};
+
+/** Update progress – can be called on pause, resume, bookmark, or periodic heartbeat */
+export const updateLectureActivity = async (activityId: string, updates: Partial<LectureActivity>) => {
+  const { data, error } = await supabase
+    .from('lecture_activity')
+    .update(updates)
+    .eq('id', activityId);
+  return { data, error };
+};
+
+/** Mark lecture as completed and compute percentage */
+export const completeLectureActivity = async (activityId: string, totalDuration: number) => {
+  const { data: existing } = await supabase
+    .from('lecture_activity')
+    .select('total_watch_seconds, completed_at')
+    .eq('id', activityId)
+    .single();
+  const watch = existing?.total_watch_seconds ?? 0;
+  const percentage = Math.min(100, (watch / totalDuration) * 100);
+  const { data, error } = await supabase
+    .from('lecture_activity')
+    .update({
+      completed_at: new Date().toISOString(),
+      completion_percentage: percentage,
+    })
+    .eq('id', activityId);
+  return { data, error };
+};
