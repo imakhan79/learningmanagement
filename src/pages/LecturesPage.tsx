@@ -15,6 +15,7 @@ export default function LecturesPage() {
   const [showForm, setShowForm] = useState(false);
   const [watching, setWatching] = useState<Lecture | null>(null);
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set());
+  const [submissions, setSubmissions] = useState<Set<string>>(new Set());
 
   const loadCourses = async () => {
     let q = supabase.from('courses').select('*').order('created_at', { ascending: false });
@@ -39,17 +40,21 @@ export default function LecturesPage() {
     let mats: any[] = [];
     let progMap: Record<string, any> = {};
     let bmSet = new Set<string>();
+    let subSet = new Set<string>();
     if (ids.length) {
-      const [m, p, b] = await Promise.all([
+      const [m, p, b, s] = await Promise.all([
         supabase.from('course_materials').select('*').in('lecture_id', ids),
         role === 'student' ? supabase.from('lecture_progress').select('*').eq('student_id', profile!.id).in('lecture_id', ids) : Promise.resolve({ data: null }),
         role === 'student' ? supabase.from('bookmarks').select('lecture_id').eq('student_id', profile!.id).in('lecture_id', ids) : Promise.resolve({ data: null }),
+        role === 'student' ? supabase.from('worksheet_submissions').select('material_id').eq('student_id', profile!.id) : Promise.resolve({ data: null }),
       ]);
       mats = m.data || [];
       if (p.data) p.data.forEach((pp: any) => (progMap[pp.lecture_id] = pp));
       if (b.data) b.data.forEach((bb: any) => bmSet.add(bb.lecture_id));
+      if (s.data) s.data.forEach((ss: any) => subSet.add(ss.material_id));
     }
     setBookmarks(bmSet);
+    setSubmissions(subSet);
     setLectures((lecs || []).map((l: any) => ({ ...l, materials: mats.filter((m) => m.lecture_id === l.id), progress: progMap[l.id] })));
     setLoading(false);
   };
@@ -61,6 +66,13 @@ export default function LecturesPage() {
     } else {
       await supabase.from('bookmarks').insert({ student_id: profile!.id, lecture_id: lectureId });
       setBookmarks((s) => { const n = new Set(s); n.add(lectureId); return n; });
+    }
+  };
+
+  const submitWorksheet = async (materialId: string) => {
+    if (!submissions.has(materialId)) {
+      await supabase.from('worksheet_submissions').insert({ student_id: profile!.id, material_id: materialId, status: 'submitted' });
+      setSubmissions((s) => { const n = new Set(s); n.add(materialId); return n; });
     }
   };
 
@@ -141,9 +153,16 @@ export default function LecturesPage() {
                   {(l.materials || []).length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-3">
                       {(l.materials || []).map((m) => (
-                        <a key={m.id} href={m.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs hover:bg-slate-200">
-                          <Download size={12} /> {m.title} <Badge color="slate">{m.type}</Badge>
-                        </a>
+                        <div key={m.id} className="flex items-center gap-1.5">
+                          <a href={m.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs hover:bg-slate-200">
+                            <Download size={12} /> {m.title} <Badge color="slate">{m.type}</Badge>
+                          </a>
+                          {role === 'student' && m.type === 'worksheet' && (
+                            <Button size="sm" variant={submissions.has(m.id) ? "ghost" : "primary"} onClick={() => submitWorksheet(m.id)} disabled={submissions.has(m.id)}>
+                              {submissions.has(m.id) ? 'Completed' : 'Mark as Complete'}
+                            </Button>
+                          )}
+                        </div>
                       ))}
                     </div>
                   )}

@@ -62,6 +62,14 @@ export interface CourseMaterial {
   created_at: string;
 }
 
+export interface WorksheetSubmission {
+  id: string;
+  student_id: string;
+  material_id: string;
+  status: 'submitted' | 'graded';
+  submitted_at: string;
+}
+
 export interface Enrollment {
   id: string;
   course_id: string;
@@ -124,6 +132,7 @@ export interface QuestionBankItem {
 export interface Exam {
   id: string;
   course_id: string;
+  type: 'exam' | 'quiz';
   title: string;
   description: string;
   duration_minutes: number;

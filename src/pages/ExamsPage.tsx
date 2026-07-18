@@ -58,8 +58,8 @@ export default function ExamsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">Exams</h1>
-          <p className="text-sm text-slate-500">{role === 'student' ? 'Your available exams' : 'Create and manage exams'}</p>
+          <h1 className="text-xl font-bold text-slate-800">Exams & Quizzes</h1>
+          <p className="text-sm text-slate-500">{role === 'student' ? 'Your available exams and quizzes' : 'Create and manage exams and quizzes'}</p>
         </div>
         {role !== 'student' && <Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus size={16} /> New Exam</Button>}
       </div>
@@ -71,7 +71,10 @@ export default function ExamsPage() {
           {exams.map((e) => (
             <Card key={e.id} className="p-5">
               <div className="flex items-start justify-between gap-2 mb-2">
-                <h3 className="font-semibold text-slate-800">{e.title}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-slate-800">{e.title}</h3>
+                  <Badge color={e.type === 'quiz' ? 'purple' : 'slate'}>{e.type?.toUpperCase() || 'EXAM'}</Badge>
+                </div>
                 <Badge color={e.status === 'published' ? 'green' : e.status === 'closed' ? 'slate' : 'amber'}>{e.status}</Badge>
               </div>
               {e.course && <p className="text-xs text-slate-400 mb-2">{e.course.title}</p>}
@@ -86,7 +89,7 @@ export default function ExamsPage() {
                   e.attempt?.status === 'submitted' || e.attempt?.status === 'graded' ? (
                     <Badge color="green"><CheckCircle2 size={12} className="mr-1" /> Submitted — {e.attempt.score}/{e.attempt.total_marks}</Badge>
                   ) : (
-                    <Button size="sm" onClick={() => setTaking(e)} disabled={e.status !== 'published'}><Play size={14} /> {e.attempt ? 'Resume' : 'Start'} Exam</Button>
+                    <Button size="sm" onClick={() => setTaking(e)} disabled={e.status !== 'published'}><Play size={14} /> {e.attempt ? 'Resume' : 'Start'} {e.type === 'quiz' ? 'Quiz' : 'Exam'}</Button>
                   )
                 ) : (
                   <>
@@ -117,6 +120,7 @@ function ExamForm({ exam, courses, onClose, onSaved }: { exam: Exam | null; cour
   const [title, setTitle] = useState(exam?.title || '');
   const [description, setDescription] = useState(exam?.description || '');
   const [courseId, setCourseId] = useState(exam?.course_id || courses[0]?.id || '');
+  const [type, setType] = useState(exam?.type || 'exam');
   const [duration, setDuration] = useState(String(exam?.duration_minutes || 60));
   const [passMarks, setPassMarks] = useState(String(exam?.pass_marks || 50));
   const [shuffleQ, setShuffleQ] = useState(exam?.shuffle_questions ?? true);
@@ -128,7 +132,7 @@ function ExamForm({ exam, courses, onClose, onSaved }: { exam: Exam | null; cour
   const save = async () => {
     setSaving(true);
     const payload = {
-      title, description, course_id: courseId,
+      title, description, course_id: courseId, type,
       duration_minutes: parseInt(duration) || 60,
       pass_marks: parseFloat(passMarks) || 50,
       shuffle_questions: shuffleQ, shuffle_options: shuffleO,
@@ -142,15 +146,18 @@ function ExamForm({ exam, courses, onClose, onSaved }: { exam: Exam | null; cour
   };
 
   return (
-    <Modal open onClose={onClose} title={exam ? 'Edit Exam' : 'New Exam'} size="lg">
+    <Modal open onClose={onClose} title={exam ? 'Edit Assessment' : 'New Assessment'} size="lg">
       <div className="space-y-4">
         <Input label="Title" value={title} onChange={setTitle} placeholder="Midterm Exam" required />
         <Textarea label="Description" value={description} onChange={setDescription} rows={2} />
         <div className="grid grid-cols-2 gap-3">
           <Select label="Course" value={courseId} onChange={setCourseId} options={courses.map((c) => ({ value: c.id, label: c.title }))} />
-          <Input label="Duration (min)" value={duration} onChange={setDuration} type="number" />
+          <Select label="Type" value={type} onChange={setType} options={[{ value: 'exam', label: 'Exam' }, { value: 'quiz', label: 'Quiz' }]} />
         </div>
-        <Input label="Pass Marks" value={passMarks} onChange={setPassMarks} type="number" />
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Duration (min)" value={duration} onChange={setDuration} type="number" />
+          <Input label="Pass Marks" value={passMarks} onChange={setPassMarks} type="number" />
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={shuffleQ} onChange={(e) => setShuffleQ(e.target.checked)} className="rounded" /> Shuffle Questions</label>
           <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={shuffleO} onChange={(e) => setShuffleO(e.target.checked)} className="rounded" /> Shuffle Options</label>

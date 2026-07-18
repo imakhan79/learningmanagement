@@ -130,7 +130,7 @@ async function loadProfessor(setData: (d: any) => void, profId: string) {
 async function loadStudent(setData: (d: any) => void, studentId: string) {
   const [enrollments, progress, attempts, bookmarks, alerts] = await Promise.all([
     supabase.from('enrollments').select('id, course_id, status, progress_pct, course:courses(id, title)').eq('student_id', studentId),
-    supabase.from('lecture_progress').select('id, lecture_id, completion_pct, total_watch_seconds, completed_at').eq('student_id', studentId),
+    supabase.from('lecture_progress').select('id, lecture_id, completion_pct, total_watch_seconds, completed_at, last_viewed_at, lecture:lectures(title, course:courses(title))').eq('student_id', studentId).order('last_viewed_at', { ascending: false }).limit(5),
     supabase.from('exam_attempts').select('id, score, total_marks, status, exam:exams(title)').eq('student_id', studentId),
     supabase.from('bookmarks').select('id, lecture_id').eq('student_id', studentId),
     supabase.from('alerts').select('id, severity, title, message, created_at, read_at').eq('user_id', studentId).order('created_at', { ascending: false }).limit(6),
@@ -159,6 +159,14 @@ async function loadStudent(setData: (d: any) => void, studentId: string) {
     passed,
     alerts: alerts.data || [],
     courseList: enr.map((e: any) => ({ id: e.course?.id, title: e.course?.title, progress: e.progress_pct, status: e.status })),
+    attendanceLog: prog.filter((p: any) => p.total_watch_seconds > 0).map((p: any) => ({
+      id: p.id,
+      lectureTitle: p.lecture?.title,
+      courseTitle: p.lecture?.course?.title,
+      watchSeconds: p.total_watch_seconds,
+      completedAt: p.completed_at,
+      lastViewedAt: p.last_viewed_at
+    })),
   });
 }
 
@@ -279,9 +287,28 @@ function StudentDashboard({ data }: { data: any }) {
           {(data.courseList || []).length === 0 && <p className="text-sm text-slate-400 text-center py-4">No enrollments yet</p>}
         </div>
       </ChartCard>
-      <ChartCard title="Recent Alerts">
-        <AlertList alerts={data.alerts} />
-      </ChartCard>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ChartCard title="Attendance Log">
+          <div className="space-y-3">
+            {(data.attendanceLog || []).map((a: any) => (
+              <div key={a.id} className="flex items-center justify-between p-2 rounded-lg border border-slate-100 bg-slate-50">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-700 truncate">{a.lectureTitle}</p>
+                  <p className="text-xs text-slate-500 truncate">{a.courseTitle}</p>
+                </div>
+                <div className="text-right">
+                  <Badge color={a.completedAt ? 'green' : 'blue'}>{Math.round(a.watchSeconds / 60)} min</Badge>
+                  <p className="text-[10px] text-slate-400 mt-1">{new Date(a.lastViewedAt).toLocaleDateString()}</p>
+                </div>
+              </div>
+            ))}
+            {(data.attendanceLog || []).length === 0 && <p className="text-sm text-slate-400 text-center py-4">No attendance records yet</p>}
+          </div>
+        </ChartCard>
+        <ChartCard title="Recent Alerts">
+          <AlertList alerts={data.alerts} />
+        </ChartCard>
+      </div>
     </div>
   );
 }
