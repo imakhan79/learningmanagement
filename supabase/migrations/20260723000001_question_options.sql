@@ -10,14 +10,14 @@ CREATE TABLE IF NOT EXISTS question_options (
 ALTER TABLE question_options ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "question_options_select" ON question_options FOR SELECT
-  USING (auth.uid() = ANY (SELECT professor_id FROM profiles WHERE id = auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','professor')));
+  USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','professor','student')));
 
 CREATE POLICY "question_options_insert" ON question_options FOR INSERT
-  WITH CHECK (auth.uid() = ANY (SELECT professor_id FROM profiles WHERE id = auth.uid()));
+  WITH CHECK (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','professor')));
 
 CREATE POLICY "question_options_update" ON question_options FOR UPDATE
-  USING (auth.uid() = ANY (SELECT professor_id FROM profiles WHERE id = auth.uid()))
-  WITH CHECK (auth.uid() = ANY (SELECT professor_id FROM profiles WHERE id = auth.uid()));
+  USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','professor')))
+  WITH CHECK (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','professor')));
 
 CREATE POLICY "question_options_delete" ON question_options FOR DELETE
-  USING (auth.uid() = ANY (SELECT professor_id FROM profiles WHERE id = auth.uid()));
+  USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','professor')));

@@ -17,14 +17,14 @@ ALTER TABLE question_bank ENABLE ROW LEVEL SECURITY;
 
 -- Policies for access control
 CREATE POLICY "question_bank_select" ON question_bank FOR SELECT
-  USING (auth.uid() = ANY (SELECT professor_id FROM profiles WHERE id = auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','professor')));
+  USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','professor','student')));
 
 CREATE POLICY "question_bank_insert" ON question_bank FOR INSERT
-  WITH CHECK (auth.uid() = ANY (SELECT professor_id FROM profiles WHERE id = auth.uid()));
+  WITH CHECK (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','professor')));
 
 CREATE POLICY "question_bank_update" ON question_bank FOR UPDATE
-  USING (auth.uid() = ANY (SELECT professor_id FROM profiles WHERE id = auth.uid()))
-  WITH CHECK (auth.uid() = ANY (SELECT professor_id FROM profiles WHERE id = auth.uid()));
+  USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','professor')))
+  WITH CHECK (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','professor')));
 
 CREATE POLICY "question_bank_delete" ON question_bank FOR DELETE
-  USING (auth.uid() = ANY (SELECT professor_id FROM profiles WHERE id = auth.uid()));
+  USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','professor')));
