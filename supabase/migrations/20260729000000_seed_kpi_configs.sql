@@ -8,4 +8,4 @@ SELECT 'Student Course Completion', 'Target: Complete course in 30 days', 'stude
 
 INSERT INTO kpi_configs (name, description, role, metric_key, target_value, comparison, period, unit, active, created_by)
 SELECT 'Engagement KPI', 'Minimum watch time: 80%', 'student', 'watch_time_pct', 80, 'gte', 'monthly', '%', true, id FROM profiles WHERE role = 'admin' LIMIT 1;
-ON CONFLICT DO NOTHING;
+

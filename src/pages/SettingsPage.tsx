@@ -10,6 +10,11 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [phone, setPhone] = useState(profile?.phone || '');
+  
+  // Notification Preferences State
+  const defaultPrefs = { in_app: true, email: true, push: false };
+  const [prefs, setPrefs] = useState<any>(profile?.notification_preferences || defaultPrefs);
+
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -36,10 +41,18 @@ export default function SettingsPage() {
 
   const saveProfile = async () => {
     setSaving(true);
-    await supabase.from('profiles').update({ full_name: fullName, phone }).eq('id', profile!.id);
+    await supabase.from('profiles').update({ 
+      full_name: fullName, 
+      phone,
+      notification_preferences: prefs
+    }).eq('id', profile!.id);
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const togglePref = (key: string) => {
+    setPrefs((prev: any) => ({ ...prev, [key]: !prev[key] }));
   };
 
   if (loading) return <Spinner />;
@@ -57,35 +70,42 @@ export default function SettingsPage() {
           <Input label="Full Name" value={fullName} onChange={setFullName} />
           <Input label="Phone" value={phone} onChange={setPhone} />
         </div>
-        <div className="mt-4 flex items-center gap-3">
-          <Button onClick={saveProfile} disabled={saving}>{saving ? 'Saving…' : 'Save Profile'}</Button>
+        
+        <h3 className="text-sm font-semibold text-slate-700 mt-6 mb-3 flex items-center gap-2"><Bell size={16} /> Notification Channels</h3>
+        <div className="space-y-2 max-w-xl">
+          <label className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
+            <span className="text-sm text-slate-700">In-App Notifications (Dashboard Alerts)</span>
+            <input type="checkbox" checked={prefs.in_app !== false} onChange={() => togglePref('in_app')} className="rounded border-slate-300 text-sky-600 focus:ring-sky-500" />
+          </label>
+          <label className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
+            <span className="text-sm text-slate-700">Email Notifications</span>
+            <input type="checkbox" checked={prefs.email !== false} onChange={() => togglePref('email')} className="rounded border-slate-300 text-sky-600 focus:ring-sky-500" />
+          </label>
+          <label className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
+            <span className="text-sm text-slate-700">Push Notifications (Mobile/Desktop)</span>
+            <input type="checkbox" checked={prefs.push === true} onChange={() => togglePref('push')} className="rounded border-slate-300 text-sky-600 focus:ring-sky-500" />
+          </label>
+        </div>
+
+        <div className="mt-6 flex items-center gap-3">
+          <Button onClick={saveProfile} disabled={saving}>{saving ? 'Saving…' : 'Save Settings'}</Button>
           {saved && <Badge color="green">Saved</Badge>}
         </div>
       </Card>
 
-      <Card className="p-5">
-        <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2"><Database size={16} /> System Statistics</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {Object.entries(stats).map(([k, v]) => (
-            <div key={k} className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-              <p className="text-xs text-slate-500 capitalize">{k}</p>
-              <p className="text-xl font-bold text-slate-800">{v as number}</p>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      <Card className="p-5">
-        <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2"><Bell size={16} /> Notification Preferences</h3>
-        <div className="space-y-2">
-          {['In-app notifications', 'Email notifications', 'KPI alerts', 'Exam reminders', 'New material alerts'].map((n, i) => (
-            <label key={n} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50">
-              <span className="text-sm text-slate-700">{n}</span>
-              <input type="checkbox" defaultChecked={i < 3} className="rounded border-slate-300 text-sky-600 focus:ring-sky-500" />
-            </label>
-          ))}
-        </div>
-      </Card>
+      {profile?.role === 'admin' && (
+        <Card className="p-5">
+          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2"><Database size={16} /> System Statistics</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {Object.entries(stats).map(([k, v]) => (
+              <div key={k} className="p-3 rounded-lg bg-slate-50 border border-slate-100">
+                <p className="text-xs text-slate-500 capitalize">{k}</p>
+                <p className="text-xl font-bold text-slate-800">{v as number}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

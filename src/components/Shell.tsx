@@ -16,6 +16,8 @@ import {
   X,
   ChevronRight,
   Sparkles,
+  Video,
+  DollarSign,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { Role } from '../lib/supabase';
@@ -31,6 +33,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard',    label: 'Dashboard',       icon: <LayoutDashboard size={20} />, roles: ['admin', 'professor', 'student'] },
   { id: 'courses',      label: 'Courses',          icon: <BookOpen size={20} />,        roles: ['admin', 'professor', 'student'] },
   { id: 'lectures',     label: 'Lectures',         icon: <FileText size={20} />,        roles: ['professor', 'student'] },
+  { id: 'live',         label: 'Live Sessions',    icon: <Video size={20} />,           roles: ['admin', 'professor', 'student'] },
   { id: 'users',        label: 'Users',            icon: <Users size={20} />,           roles: ['admin'] },
   { id: 'questionbank', label: 'Question Bank',    icon: <ClipboardList size={20} />,   roles: ['admin', 'professor'] },
   { id: 'exams',        label: 'Exams',            icon: <ScrollText size={20} />,      roles: ['admin', 'professor', 'student'] },
@@ -38,6 +41,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'kpis',         label: 'KPI Monitoring',   icon: <Target size={20} />,          roles: ['admin', 'professor'] },
   { id: 'reports',      label: 'Reports',          icon: <FileText size={20} />,        roles: ['admin', 'professor', 'student'] },
   { id: 'alerts',       label: 'Alerts',           icon: <Bell size={20} />,            roles: ['admin', 'professor', 'student'] },
+  { id: 'finance',      label: 'Finance',          icon: <DollarSign size={20} />,      roles: ['admin', 'student'] },
   { id: 'audit',        label: 'Audit Logs',       icon: <ScrollText size={20} />,      roles: ['admin'] },
   { id: 'settings',     label: 'System Settings',  icon: <Settings size={20} />,        roles: ['admin'] },
 ];

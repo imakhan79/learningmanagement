@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './lib/auth';
 import { supabase } from './lib/supabase';
 import { evaluateUserKPIs } from './lib/kpiEngine';
+import { evaluateTimeBasedAlerts } from './lib/notificationEngine';
 import AuthPage from './pages/AuthPage';
 import Shell from './components/Shell';
 import DashboardPage from './pages/DashboardPage';
@@ -16,6 +17,8 @@ import ReportsPage from './pages/ReportsPage';
 import AlertsPage from './pages/AlertsPage';
 import AuditPage from './pages/AuditPage';
 import SettingsPage from './pages/SettingsPage';
+import LivePage from './pages/LivePage';
+import FinancePage from './pages/FinancePage';
 import { Spinner } from './components/ui';
 
 function AppInner() {
@@ -28,6 +31,9 @@ function AppInner() {
     (async () => {
       // Background continuous KPI evaluation
       await evaluateUserKPIs(profile.id, profile.role);
+      
+      // Evaluate time-based alerts (Due dates, Behind Schedule, etc.)
+      await evaluateTimeBasedAlerts(profile.id, profile.role);
       
       // Fetch unread alerts
       const { count } = await supabase.from('alerts').select('id', { count: 'exact', head: true }).eq('user_id', profile.id).is('read_at', null);
@@ -61,6 +67,8 @@ function AppInner() {
       case 'reports': return <ReportsPage />;
       case 'alerts': return <AlertsPage />;
       case 'audit': return role === 'admin' ? <AuditPage /> : <DashboardPage />;
+      case 'live': return <LivePage />;
+      case 'finance': return role === 'admin' || role === 'student' ? <FinancePage /> : <DashboardPage />;
       case 'settings': return role === 'admin' ? <SettingsPage /> : <DashboardPage />;
       default: return <DashboardPage />;
     }
