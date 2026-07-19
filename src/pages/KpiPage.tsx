@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Target, Plus, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Target, Plus, AlertTriangle, CheckCircle2, Pencil, Video, GraduationCap, BarChart3, DollarSign, BadgeCheck } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { supabase, KpiConfig, KpiSnapshot, Profile } from '../lib/supabase';
 import { Button, Card, Input, Select, Textarea, Badge, Spinner, EmptyState, Modal, ProgressBar } from '../components/ui';
@@ -93,63 +93,181 @@ export default function KpiPage() {
             <Select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)} options={[{ value: '', label: 'Select user to compute…' }, ...users.map((u) => ({ value: u.id, label: `${u.full_name || u.email} (${u.role})` }))]} />
           )}
           {selectedUser && <Button onClick={() => compute(selectedUser)}><Target size={16} /> Compute KPIs</Button>}
-          {role === 'professor' && <Button variant="outline" onClick={() => compute(profile!.id)}><Target size={16} /> Refresh My KPIs</Button>}
+          {(role === 'professor' || role === 'student') && <Button variant="outline" onClick={() => compute(profile!.id)}><Target size={16} /> Refresh My KPIs</Button>}
           {role === 'admin' && <Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus size={16} /> New KPI</Button>}
         </div>
       </div>
 
-      {role === 'admin' && (
-        <Card className="p-5">
-          <h3 className="text-sm font-semibold text-slate-700 mb-3">KPI Configurations</h3>
-          {configs.length === 0 ? (
-            <EmptyState icon={<Target size={28} />} title="No KPIs configured" description="Create KPI targets to monitor performance" />
-          ) : (
-            <div className="space-y-2">
-              {configs.map((c) => (
-                <div key={c.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-slate-50">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2"><p className="text-sm font-medium text-slate-700">{c.name}</p><Badge color="slate">{c.role}</Badge><Badge color="slate">{c.period}</Badge></div>
-                    <p className="text-xs text-slate-500 mt-0.5">Target: {c.target_value} {c.unit} ({c.comparison}) • {c.metric_key}</p>
-                  </div>
-                  <Button size="sm" variant="ghost" onClick={() => { setEditing(c); setShowForm(true); }}>Edit</Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
+      {(role === 'professor' || role === 'student') && (
+        <div className="rounded-3xl p-6 sm:p-7 relative overflow-hidden text-white"
+             style={{ background: 'linear-gradient(135deg,#312e81 0%,#4338ca 55%,#6366f1 120%)' }}>
+          <div className="absolute top-0 right-0 w-56 h-56 rounded-full opacity-25 -translate-y-1/3 translate-x-1/4"
+               style={{ background: 'radial-gradient(circle,#a5b4fc,transparent 70%)' }} />
+          <div className="relative z-10">
+            <p className="text-xs font-bold uppercase tracking-widest text-white/70">Welcome Back</p>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight mt-1">{profile?.full_name || (role === 'professor' ? 'Professor' : 'Student')}</h1>
+          </div>
+        </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {configs.map((c) => {
-          const userSnaps = role === 'admin' ? snapshots.filter((s) => s.kpi_config_id === c.id) : snapshots.filter((s) => s.kpi_config_id === c.id);
-          if (userSnaps.length === 0) return null;
-          const latest = userSnaps[0];
-          const pct = c.target_value ? Math.min(100, (latest.actual_value / c.target_value) * 100) : 100;
-          const statusColor = latest.status === 'on_track' ? 'green' : latest.status === 'critical' ? 'red' : 'amber';
-          const StatusIcon = latest.status === 'on_track' ? CheckCircle2 : AlertTriangle;
-          return (
-            <Card key={c.id} className="p-5">
-              <div className="flex items-start justify-between mb-3">
-                <div><p className="text-sm font-semibold text-slate-700">{c.name}</p><p className="text-xs text-slate-400">{c.description}</p></div>
-                <Badge color={statusColor}><StatusIcon size={12} className="mr-1" />{latest.status.replace('_', ' ')}</Badge>
+      {(role === 'professor' || role === 'student') && (
+        <div className="space-y-3">
+          {configs.filter((c) => c.role === role).length === 0 ? (
+            <Card><EmptyState icon={<Target size={28} />} title="No KPIs assigned" description="Admins need to configure KPI targets" /></Card>
+          ) : snapshots.length === 0 ? (
+            <Card><EmptyState icon={<Target size={28} />} title="No KPI snapshots yet" description={`Click "Refresh My KPIs" above to compute your latest performance.`} /></Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {configs.filter((c) => c.role === role).map((c) => {
+                const userSnaps = snapshots.filter((s) => s.kpi_config_id === c.id);
+                if (userSnaps.length === 0) return null;
+                const latest = userSnaps[0];
+                const borderColor = latest.status === 'critical' ? 'border-l-danger-500' : latest.status === 'below_target' ? 'border-l-warning-500' : 'border-l-success-500';
+                const badgeColor = latest.status === 'critical' ? 'danger' : latest.status === 'below_target' ? 'warning' : 'success';
+                const badgeLabel = latest.status === 'critical' ? 'Critical' : latest.status === 'below_target' ? 'Watch' : 'Healthy';
+                const Icon = kpiIcon(c.metric_key);
+                const val = Math.round(latest.actual_value * 100) / 100;
+                return (
+                  <div key={c.id} className={`card p-5 border-l-4 ${borderColor}`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+                        <span className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500"><Icon size={15} /></span>
+                        {c.name}
+                      </span>
+                      <Badge color={badgeColor}>{badgeLabel}</Badge>
+                    </div>
+                    <p className="text-3xl font-black text-slate-800 tracking-tight">{val}{c.unit === '%' ? '%' : ''}</p>
+                    <p className={`text-xs font-semibold mt-1.5 ${latest.status === 'on_track' ? 'text-success-600' : 'text-danger-600'}`}>
+                      {latest.status === 'on_track' ? `Meeting target of ${c.target_value}${c.unit}` : `Below threshold (${c.target_value}${c.unit})`}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {snapshots.length > 0 && (
+            <div className="rounded-2xl p-6 text-white" style={{ background: 'linear-gradient(135deg,#475569,#334155)' }}>
+              <p className="text-xs font-bold uppercase tracking-widest text-white/60 mb-2">Performance Insight</p>
+              <p className="text-sm leading-relaxed text-white/90">
+                {snapshots.some((s) => s.status !== 'on_track')
+                  ? 'A few metrics are trending below target — keep content fresh and engaging to bring them back on track.'
+                  : "You're meeting all your current targets. Keep up the consistent work."}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {role === 'admin' && (
+        <div className="space-y-4">
+          {(() => {
+            const onTrack = snapshots.filter((s) => s.status === 'on_track').length;
+            const total = snapshots.length || 1;
+            const perf = Math.round((onTrack / total) * 1000) / 10;
+            return (
+              <div className="rounded-3xl p-6 sm:p-7 relative overflow-hidden text-white"
+                   style={{ background: 'linear-gradient(135deg,#0f0c29 0%,#302b63 55%,#4f46e5 120%)' }}>
+                <div className="absolute top-0 right-0 w-56 h-56 rounded-full opacity-25 -translate-y-1/3 translate-x-1/4"
+                     style={{ background: 'radial-gradient(circle,#818cf8,transparent 70%)' }} />
+                <div className="relative z-10">
+                  <p className="text-xs font-bold uppercase tracking-widest text-white/70">Current Performance</p>
+                  <div className="flex items-end justify-between mt-2">
+                    <span className="text-4xl sm:text-5xl font-black tracking-tight">{snapshots.length ? `${perf}%` : '—'}</span>
+                    <span className="flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-400/20 text-emerald-300">
+                      <TrendingUpMini /> On Track
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-baseline gap-2 mb-2">
-                <span className="text-2xl font-bold text-slate-800">{Math.round(latest.actual_value * 100) / 100}</span>
-                <span className="text-sm text-slate-400">/ {c.target_value} {c.unit}</span>
+            );
+          })()}
+
+          <Card className="p-5">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">KPI Configurations</h3>
+            {configs.length === 0 ? (
+              <EmptyState icon={<Target size={28} />} title="No KPIs configured" description="Create KPI targets to monitor performance" />
+            ) : (
+              <div className="space-y-3">
+                {configs.map((c) => {
+                  const userSnaps = snapshots.filter((s) => s.kpi_config_id === c.id);
+                  const alert = userSnaps.some((s) => s.status !== 'on_track');
+                  const Icon = kpiIcon(c.metric_key);
+                  return (
+                    <div key={c.id} className={`flex items-center gap-4 p-4 rounded-2xl border hover-lift ${alert ? 'border-danger-200 bg-danger-50/40' : 'border-slate-100 bg-slate-50'}`}>
+                      <span className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 bg-white text-primary-600 shadow-sm">
+                        <Icon size={20} />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-slate-800 truncate">{c.name}</p>
+                          {alert && <span className="w-1.5 h-1.5 rounded-full bg-danger-500 shrink-0" />}
+                        </div>
+                        <p className="text-sm text-slate-500 truncate">{c.description || `${c.role} • ${c.period}`}</p>
+                      </div>
+                      <button
+                        onClick={() => { setEditing(c); setShowForm(true); }}
+                        className="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-primary-600 hover:border-primary-300 transition-colors shrink-0"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
-              <ProgressBar value={pct} />
-              <p className="text-xs text-slate-400 mt-2">Computed {new Date(latest.computed_at).toLocaleDateString()}</p>
-            </Card>
-          );
-        })}
-        {configs.length === 0 && role !== 'admin' && (
-          <Card className="md:col-span-2"><EmptyState icon={<Target size={28} />} title="No KPIs assigned" description="Admins need to configure KPI targets" /></Card>
-        )}
-      </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {role === 'admin' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {configs.map((c) => {
+            const userSnaps = snapshots.filter((s) => s.kpi_config_id === c.id);
+            if (userSnaps.length === 0) return null;
+            const latest = userSnaps[0];
+            const pct = c.target_value ? Math.min(100, (latest.actual_value / c.target_value) * 100) : 100;
+            const statusColor = latest.status === 'on_track' ? 'green' : latest.status === 'critical' ? 'red' : 'amber';
+            const StatusIcon = latest.status === 'on_track' ? CheckCircle2 : AlertTriangle;
+            return (
+              <Card key={c.id} className="p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <div><p className="text-sm font-semibold text-slate-700">{c.name}</p><p className="text-xs text-slate-400">{c.description}</p></div>
+                  <Badge color={statusColor}><StatusIcon size={12} className="mr-1" />{latest.status.replace('_', ' ')}</Badge>
+                </div>
+                <div className="flex items-baseline gap-2 mb-2">
+                  <span className="text-2xl font-bold text-slate-800">{Math.round(latest.actual_value * 100) / 100}</span>
+                  <span className="text-sm text-slate-400">/ {c.target_value} {c.unit}</span>
+                </div>
+                <ProgressBar value={pct} />
+                <p className="text-xs text-slate-400 mt-2">Computed {new Date(latest.computed_at).toLocaleDateString()}</p>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {showForm && <KpiForm config={editing} onClose={() => setShowForm(false)} onSaved={() => { setShowForm(false); load(); }} />}
     </div>
   );
+}
+
+function TrendingUpMini() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+      <polyline points="17 6 23 6 23 12" />
+    </svg>
+  );
+}
+
+function kpiIcon(metricKey: string) {
+  if (metricKey.includes('lecture')) return Video;
+  if (metricKey.includes('course')) return GraduationCap;
+  if (metricKey.includes('engagement') || metricKey.includes('watch')) return BarChart3;
+  if (metricKey.includes('revenue') || metricKey.includes('fee')) return DollarSign;
+  if (metricKey.includes('approval') || metricKey.includes('quiz')) return BadgeCheck;
+  return Target;
 }
 
 function KpiForm({ config, onClose, onSaved }: { config: KpiConfig | null; onClose: () => void; onSaved: () => void }) {

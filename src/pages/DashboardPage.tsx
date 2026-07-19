@@ -12,10 +12,12 @@ import {
   Activity,
   BookMarked,
   BarChart3,
+  ChevronRight,
+  Play,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
-import { StatCard, ChartCard, BarChart, DonutChart } from '../components/charts';
+import { StatCard, ChartCard, BarChart, DonutChart, ProgressRing } from '../components/charts';
 import { Spinner, Badge, ProgressBar } from '../components/ui';
 
 export default function DashboardPage() {
@@ -41,7 +43,7 @@ export default function DashboardPage() {
 
   if (role === 'admin') return <AdminDashboard data={data} />;
   if (role === 'professor') return <ProfessorDashboard data={data} />;
-  return <StudentDashboard data={data} />;
+  return <StudentDashboard data={data} firstName={(profile?.full_name || 'Student').split(' ')[0]} />;
 }
 
 async function loadAdmin(setData: (d: any) => void) {
@@ -262,24 +264,75 @@ function ProfessorDashboard({ data }: { data: any }) {
   );
 }
 
-function StudentDashboard({ data }: { data: any }) {
+function StudentDashboard({ data, firstName }: { data: any; firstName: string }) {
+  const inProgress = (data.courseList || []).filter((c: any) => c.status !== 'completed');
+  const upNext = inProgress[0];
+  const dueToday = Math.min(3, inProgress.length);
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-1 mb-8">
-        <h1 className="text-2xl font-black text-slate-800 tracking-tight">My Learning Hub</h1>
-        <p className="text-slate-500 font-medium">Track your progress, scores, and upcoming activities</p>
+      {/* Greeting hero */}
+      <div className="rounded-3xl p-6 sm:p-7 relative overflow-hidden"
+           style={{ background: 'linear-gradient(135deg,#0f0c29 0%,#302b63 60%,#24243e 100%)' }}>
+        <div className="absolute top-0 right-0 w-56 h-56 rounded-full opacity-20 -translate-y-1/3 translate-x-1/4"
+             style={{ background: 'radial-gradient(circle,#6366f1,transparent 70%)' }} />
+        <div className="relative z-10">
+          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Welcome back, {firstName}</h1>
+          <p className="text-slate-300 mt-1.5">
+            {dueToday > 0 ? `You have ${dueToday} lecture${dueToday === 1 ? '' : 's'} to complete today.` : "You're all caught up — great work!"}
+          </p>
+        </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
-        <StatCard label="Enrolled Courses" value={data.courses} icon={<BookOpen size={20} />} color="sky" />
-        <StatCard label="Lectures Completed" value={data.completedLectures} icon={<CheckCircle2 size={20} />} color="emerald" />
-        <StatCard label="Learning Streak" value={`${data.studyStreak} Days`} icon={<TrendingUp size={20} />} color="violet" trend="up" trendLabel="Active" />
-        <StatCard label="Saved Items" value={data.bookmarks} icon={<BookMarked size={20} />} color="amber" />
+
+      {/* Progress rings */}
+      <div className="grid grid-cols-2 gap-4 sm:gap-5">
+        <div className="card p-6 flex items-center justify-center">
+          <ProgressRing value={data.avgProgress} color="#4f46e5" label="Overall Progress" />
+        </div>
+        <div className="card p-6 flex items-center justify-center">
+          <ProgressRing value={data.avgScore} color="#059669" label="Average Score" />
+        </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5 mt-6">
-        <StatCard label="Overall Progress" value={`${data.avgProgress}%`} icon={<BarChart3 size={20} />} color="sky" />
-        <StatCard label="Average Score" value={`${data.avgScore}%`} icon={<Award size={20} />} color="emerald" />
+
+      {/* List-style stat rows */}
+      <div className="space-y-3">
+        {[
+          { label: 'Enrolled Courses', sub: `${data.courses} Active Program${data.courses === 1 ? '' : 's'}`, icon: <BookOpen size={18} />, bg: 'bg-indigo-100 text-indigo-600' },
+          { label: 'Lectures Completed', sub: `${data.completedLectures} modules finished`, icon: <CheckCircle2 size={18} />, bg: 'bg-emerald-100 text-emerald-600' },
+          { label: 'Learning Streak', sub: `${data.studyStreak} Days Consistent`, icon: <TrendingUp size={18} />, bg: 'bg-amber-100 text-amber-600', badge: data.studyStreak > 0 ? 'Active' : undefined },
+          { label: 'Saved Items', sub: `${data.bookmarks} resources archived`, icon: <BookMarked size={18} />, bg: 'bg-slate-100 text-slate-600' },
+        ].map((row) => (
+          <div key={row.label} className="card px-5 py-4 flex items-center gap-4 hover-lift cursor-default">
+            <span className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${row.bg}`}>{row.icon}</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="font-bold text-slate-800 truncate">{row.label}</p>
+                {row.badge && <Badge color="success">{row.badge}</Badge>}
+              </div>
+              <p className="text-sm text-slate-500 truncate">{row.sub}</p>
+            </div>
+            <ChevronRight size={18} className="text-slate-300 shrink-0" />
+          </div>
+        ))}
+      </div>
+
+      {/* Up next CTA */}
+      {upNext && (
+        <div className="rounded-3xl p-6 sm:p-7 text-white relative overflow-hidden"
+             style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', boxShadow: '0 20px 50px rgba(79,70,229,0.35)' }}>
+          <p className="text-xs font-bold uppercase tracking-widest text-white/70 mb-2">Up Next</p>
+          <h3 className="text-xl font-black tracking-tight mb-5">{upNext.title}</h3>
+          <button className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-white text-primary-700 font-bold text-sm hover:bg-white/90 transition-all active:scale-95">
+            <Play size={16} className="fill-primary-700" /> Resume Learning
+          </button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
         <StatCard label="Exams Passed" value={`${data.passed}/${data.attempts}`} icon={<Target size={20} />} color="amber" />
+        <StatCard label="Total Watch Hours" value={`${data.totalWatchHours ?? 0}h`} icon={<BarChart3 size={20} />} color="sky" />
       </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-6">
         <div className="lg:col-span-2">
           <ChartCard title="Current Course Progress">

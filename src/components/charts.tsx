@@ -121,6 +121,35 @@ export function LineChart({
   );
 }
 
+export function ProgressRing({
+  value, size = 120, stroke = 12, color = '#4f46e5', label,
+}: {
+  value: number; size?: number; stroke?: number; color?: string; label?: string;
+}) {
+  const radius = 50 - stroke / 2;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.max(0, Math.min(100, value || 0));
+  const dash = (clamped / 100) * circumference;
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg width={size} height={size} viewBox="0 0 100 100" className="-rotate-90">
+          <circle cx="50" cy="50" r={radius} fill="none" stroke="#f1f5f9" strokeWidth={stroke} />
+          <circle
+            cx="50" cy="50" r={radius} fill="none" stroke={color} strokeWidth={stroke}
+            strokeDasharray={`${dash} ${circumference - dash}`} strokeLinecap="round"
+            className="transition-all duration-700 ease-out"
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-2xl font-black tracking-tight" style={{ color }}>{Math.round(clamped)}%</span>
+        </div>
+      </div>
+      {label && <p className="text-xs font-bold text-slate-500 uppercase tracking-widest text-center">{label}</p>}
+    </div>
+  );
+}
+
 export function DonutChart({
   segments, size = 160,
 }: {
