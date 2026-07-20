@@ -9,6 +9,7 @@ import Shell from './components/Shell';
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const CoursesPage = lazy(() => import('./pages/CoursesPage'));
 const LecturesPage = lazy(() => import('./pages/LecturesPage'));
+const AssignmentsPage = lazy(() => import('./pages/AssignmentsPage'));
 const UsersPage = lazy(() => import('./pages/UsersPage'));
 const QuestionBankPage = lazy(() => import('./pages/QuestionBankPage'));
 const ExamsPage = lazy(() => import('./pages/ExamsPage'));
@@ -66,6 +67,7 @@ function AppInner() {
       case 'dashboard': return <DashboardPage />;
       case 'courses': return <CoursesPage />;
       case 'lectures': return role === 'student' || role === 'professor' ? <LecturesPage /> : <DashboardPage />;
+      case 'assignments': return role === 'student' || role === 'professor' ? <AssignmentsPage /> : <DashboardPage />;
       case 'users': return role === 'admin' ? <UsersPage /> : <DashboardPage />;
       case 'questionbank': return role === 'admin' || role === 'professor' ? <QuestionBankPage /> : <DashboardPage />;
       case 'exams': return <ExamsPage />;

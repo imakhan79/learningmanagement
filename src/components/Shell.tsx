@@ -3,7 +3,7 @@ import {
   LayoutDashboard, BookOpen, Users, ClipboardList, BarChart3,
   Bell, Settings, LogOut, GraduationCap, FileText, Target,
   ScrollText, Search, X, ChevronRight, Video, DollarSign,
-  User, Sparkles, Menu, Radio, Shield, Award,
+  User, Sparkles, Menu, Radio, Shield, Award, ClipboardCheck,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { Role } from '../lib/supabase';
@@ -14,6 +14,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard',    label: 'Dashboard',      icon: <LayoutDashboard size={18}/>, roles: ['admin','professor','student'], group: 'main' },
   { id: 'courses',      label: 'Courses',         icon: <BookOpen size={18}/>,        roles: ['admin','professor','student'], group: 'main' },
   { id: 'lectures',     label: 'Lectures',        icon: <FileText size={18}/>,        roles: ['professor','student'],         group: 'main' },
+  { id: 'assignments',  label: 'Assignments',     icon: <ClipboardCheck size={18}/>,  roles: ['professor','student'],         group: 'main' },
   { id: 'live',         label: 'Live Sessions',   icon: <Radio size={18}/>,           roles: ['admin','professor','student'], group: 'main' },
   { id: 'exams',        label: 'Exams',           icon: <ScrollText size={18}/>,      roles: ['admin','professor','student'], group: 'main' },
   { id: 'analytics',   label: 'Analytics',       icon: <BarChart3 size={18}/>,       roles: ['admin','professor','student'], group: 'insights' },

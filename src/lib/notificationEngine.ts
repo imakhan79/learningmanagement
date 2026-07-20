@@ -135,6 +135,148 @@ export async function evaluateTimeBasedAlerts(userId: string, role: string) {
       }
     }
 
+    if (role === 'professor') {
+      const { data: courses } = await supabase.from('courses').select('id').eq('professor_id', userId);
+      const courseIds = (courses || []).map((c: any) => c.id);
+
+      if (courseIds.length > 0) {
+        const { data: exams } = await supabase.from('exams').select('id').in('course_id', courseIds);
+        const examIds = (exams || []).map((e: any) => e.id);
+
+        const { data: assignments } = await supabase.from('assignments').select('id, title, due_date').eq('professor_id', userId);
+        const assignmentIds = (assignments || []).map((a: any) => a.id);
+
+        // 1. Pending grading — ungraded essay responses + ungraded assignment submissions
+        let pendingEssays = 0;
+        if (examIds.length > 0) {
+          const { data: examQs } = await supabase
+            .from('exam_questions')
+            .select('question_id, question:question_bank(type)')
+            .in('exam_id', examIds);
+          const essayQIds = (examQs || []).filter((x: any) => x.question?.type === 'essay').map((x: any) => x.question_id);
+
+          if (essayQIds.length > 0) {
+            const { data: attempts } = await supabase
+              .from('exam_attempts')
+              .select('id')
+              .in('exam_id', examIds)
+              .in('status', ['submitted', 'graded']);
+            const attemptIds = (attempts || []).map((a: any) => a.id);
+
+            if (attemptIds.length > 0) {
+              const { count } = await supabase
+                .from('exam_responses')
+                .select('question_id', { count: 'exact', head: true })
+                .in('attempt_id', attemptIds)
+                .in('question_id', essayQIds)
+                .is('graded_at', null);
+              pendingEssays = count || 0;
+            }
+          }
+        }
+
+        let pendingAssignments = 0;
+        if (assignmentIds.length > 0) {
+          const { count } = await supabase
+            .from('assignment_submissions')
+            .select('id', { count: 'exact', head: true })
+            .in('assignment_id', assignmentIds)
+            .eq('status', 'submitted');
+          pendingAssignments = count || 0;
+        }
+
+        const totalPending = pendingEssays + pendingAssignments;
+        if (totalPending > 0) {
+          await sendNotification(
+            userId,
+            'professor_pending_grading',
+            'warning',
+            'Grading Pending',
+            `You have ${totalPending} submission${totalPending === 1 ? '' : 's'} awaiting grading (${pendingEssays} essay response${pendingEssays === 1 ? '' : 's'}, ${pendingAssignments} assignment${pendingAssignments === 1 ? '' : 's'}).`
+          );
+        }
+
+        // 2. Low-performing students — 2+ graded attempts below 50% across the professor's courses
+        if (examIds.length > 0) {
+          const { data: gradedAttempts } = await supabase
+            .from('exam_attempts')
+            .select('student_id, score, total_marks, student:profiles(full_name)')
+            .in('exam_id', examIds)
+            .in('status', ['submitted', 'graded']);
+
+          const lowByStudent = new Map<string, { count: number; name: string }>();
+          (gradedAttempts || []).forEach((a: any) => {
+            if (!a.total_marks) return;
+            const pct = (a.score || 0) / a.total_marks;
+            if (pct < 0.5) {
+              const entry = lowByStudent.get(a.student_id) || { count: 0, name: a.student?.full_name || 'A student' };
+              entry.count += 1;
+              lowByStudent.set(a.student_id, entry);
+            }
+          });
+
+          for (const [studentId, info] of lowByStudent) {
+            if (info.count >= 2) {
+              await sendNotification(
+                userId,
+                `professor_low_performer_${studentId}`,
+                'warning',
+                'Student Needs Attention',
+                `${info.name} has scored below 50% on ${info.count} recent assessments in your courses.`
+              );
+            }
+          }
+        }
+
+        // 3. Attendance — recent live sessions with low turnout
+        const { data: sessions } = await supabase
+          .from('live_sessions')
+          .select('id, title, course_id, start_at')
+          .in('course_id', courseIds)
+          .lt('start_at', now.toISOString())
+          .gte('start_at', new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString());
+
+        for (const session of sessions || []) {
+          const [{ count: attendedCount }, { count: enrolledCount }] = await Promise.all([
+            supabase.from('live_attendance').select('id', { count: 'exact', head: true }).eq('session_id', session.id),
+            supabase.from('enrollments').select('id', { count: 'exact', head: true }).eq('course_id', session.course_id).eq('status', 'active'),
+          ]);
+          if (enrolledCount && enrolledCount > 0) {
+            const rate = (attendedCount || 0) / enrolledCount;
+            if (rate < 0.5) {
+              await sendNotification(
+                userId,
+                `professor_low_attendance_${session.id}`,
+                'warning',
+                'Low Attendance Alert',
+                `Only ${Math.round(rate * 100)}% of enrolled students attended "${session.title}".`
+              );
+            }
+          }
+        }
+
+        // 4. Upcoming deadlines — assignments due within the next 3 days
+        const soon = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+        for (const a of assignments || []) {
+          if (!a.due_date) continue;
+          const due = new Date(a.due_date);
+          if (due >= now && due <= soon) {
+            const { count: submittedCount } = await supabase
+              .from('assignment_submissions')
+              .select('id', { count: 'exact', head: true })
+              .eq('assignment_id', a.id);
+            await sendNotification(
+              userId,
+              `professor_assignment_deadline_${a.id}`,
+              'info',
+              'Assignment Deadline Approaching',
+              `"${a.title}" is due ${due.toLocaleDateString()}. ${submittedCount || 0} submission${submittedCount === 1 ? '' : 's'} received so far.`
+            );
+          }
+        }
+      }
+    }
+
   } catch (error) {
     console.error("Time-based alerts evaluation failed:", error);
   }

@@ -5,12 +5,12 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { supabase, Exam, QuestionBankItem, Course, ExamAttempt } from '../lib/supabase';
-import { Button, Card, Input, Textarea, Select, Badge, Spinner, EmptyState, Modal } from '../components/ui';
+import { Button, Card, Input, Textarea, Select, Badge, Spinner, EmptyState, Modal, formatDateTime } from '../components/ui';
 
 export default function ExamsPage() {
   const { profile } = useAuth();
   const role = profile?.role ?? 'student';
-  const [exams, setExams] = useState<(Exam & { course?: Course; questionCount?: number; attempt?: ExamAttempt })[]>([]);
+  const [exams, setExams] = useState<(Exam & { course?: Course; questionCount?: number; attempt?: ExamAttempt; hasEssay?: boolean; pendingGrading?: number })[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Exam | null>(null);
@@ -18,6 +18,7 @@ export default function ExamsPage() {
   const [managing, setManaging] = useState<Exam | null>(null);
   const [taking, setTaking] = useState<Exam | null>(null);
   const [viewingResult, setViewingResult] = useState<ExamAttempt | null>(null);
+  const [grading, setGrading] = useState<Exam | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -41,19 +42,51 @@ export default function ExamsPage() {
     if (list.length) {
       const ids = list.map((e) => e.id);
       const [eq, att] = await Promise.all([
-        supabase.from('exam_questions').select('exam_id').in('exam_id', ids),
-        role === 'student' ? supabase.from('exam_attempts').select('*').eq('student_id', profile!.id).in('exam_id', ids) : Promise.resolve({ data: [] }),
+        supabase.from('exam_questions').select('exam_id, question_id, question:question_bank(type)').in('exam_id', ids),
+        role === 'student'
+          ? supabase.from('exam_attempts').select('*').eq('student_id', profile!.id).in('exam_id', ids)
+          : supabase.from('exam_attempts').select('id, exam_id').in('exam_id', ids),
       ]);
-      
+
       const qCount: Record<string, number> = {};
-      (eq.data || []).forEach((x: any) => (qCount[x.exam_id] = (qCount[x.exam_id] || 0) + 1));
-      
-      const attMap = new Map((att.data || []).map((a: any) => [a.exam_id, a]));
-      
-      list.forEach((e) => {
-        e.questionCount = qCount[e.id] || 0;
-        e.attempt = attMap.get(e.id);
+      const essayQuestionIds = new Set<string>();
+      const essayExamIds = new Set<string>();
+      (eq.data || []).forEach((x: any) => {
+        qCount[x.exam_id] = (qCount[x.exam_id] || 0) + 1;
+        if (x.question?.type === 'essay') {
+          essayQuestionIds.add(x.question_id);
+          essayExamIds.add(x.exam_id);
+        }
       });
+
+      if (role === 'student') {
+        const attMap = new Map((att.data || []).map((a: any) => [a.exam_id, a]));
+        list.forEach((e) => {
+          e.questionCount = qCount[e.id] || 0;
+          e.attempt = attMap.get(e.id);
+        });
+      } else {
+        const attemptToExam = new Map((att.data || []).map((a: any) => [a.id, a.exam_id]));
+        const attemptIds = (att.data || []).map((a: any) => a.id);
+        const pendingByExam: Record<string, number> = {};
+        if (attemptIds.length && essayQuestionIds.size) {
+          const { data: pending } = await supabase
+            .from('exam_responses')
+            .select('attempt_id, question_id')
+            .in('attempt_id', attemptIds)
+            .in('question_id', Array.from(essayQuestionIds))
+            .is('graded_at', null);
+          (pending || []).forEach((r: any) => {
+            const examId = attemptToExam.get(r.attempt_id);
+            if (examId) pendingByExam[examId] = (pendingByExam[examId] || 0) + 1;
+          });
+        }
+        list.forEach((e) => {
+          e.questionCount = qCount[e.id] || 0;
+          e.hasEssay = essayExamIds.has(e.id);
+          e.pendingGrading = pendingByExam[e.id] || 0;
+        });
+      }
     }
     
     setExams(list);
@@ -163,16 +196,26 @@ export default function ExamsPage() {
                       </Button>
                     )
                   ) : (
-                    <div className="flex gap-2 w-full">
-                      <Button size="sm" variant="secondary" className="flex-1" onClick={() => { setEditing(e); setShowForm(true); }}>
+                    <div className="flex flex-wrap gap-2 w-full">
+                      <Button size="sm" variant="secondary" className="flex-1 min-w-[88px]" onClick={() => { setEditing(e); setShowForm(true); }}>
                         <Settings size={14} /> Edit
                       </Button>
-                      <Button size="sm" variant="primary" className="flex-1 bg-primary-50 text-primary-700 hover:bg-primary-100" onClick={() => setManaging(e)}>
+                      <Button size="sm" variant="primary" className="flex-1 min-w-[88px] bg-primary-50 text-primary-700 hover:bg-primary-100" onClick={() => setManaging(e)}>
                         <FileText size={14} /> Setup
                       </Button>
-                      <Button size="sm" variant="ghost" className="flex-1 text-slate-500 hover:text-slate-800" onClick={async () => {
+                      {e.hasEssay && (
+                        <Button size="sm" variant="primary" className="flex-1 min-w-[88px] bg-amber-50 text-amber-700 hover:bg-amber-100 relative" onClick={() => setGrading(e)}>
+                          <UserCheck size={14} /> Grade
+                          {!!e.pendingGrading && (
+                            <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
+                              {e.pendingGrading}
+                            </span>
+                          )}
+                        </Button>
+                      )}
+                      <Button size="sm" variant="ghost" className="flex-1 min-w-[88px] text-slate-500 hover:text-slate-800" onClick={async () => {
                         const next = e.status === 'draft' ? 'published' : e.status === 'published' ? 'closed' : 'draft';
-                        await supabase.from('exams').update({ status: next }).eq('id', e.id); 
+                        await supabase.from('exams').update({ status: next }).eq('id', e.id);
                         load();
                       }}>
                         {e.status === 'draft' ? 'Publish' : e.status === 'published' ? 'Close' : 'Reopen'}
@@ -190,6 +233,7 @@ export default function ExamsPage() {
       {managing && <ManageQuestions exam={managing} onClose={() => setManaging(null)} onDone={() => { setManaging(null); load(); }} />}
       {taking && <TakeExam exam={taking} onClose={() => { setTaking(null); load(); }} />}
       {viewingResult && <ExamResult attempt={viewingResult} onClose={() => setViewingResult(null)} />}
+      {grading && <GradeEssays exam={grading} onClose={() => setGrading(null)} onDone={() => { setGrading(null); load(); }} />}
     </div>
   );
 }
@@ -895,6 +939,219 @@ function ExamResult({ attempt, onClose }: { attempt: ExamAttempt & { exam?: Exam
           <Button variant="secondary" onClick={onClose} size="lg">Close Review</Button>
         </div>
       </div>
+    </Modal>
+  );
+}
+
+// ─── Grade Essays (manual grading) ─────────────────────────────────────────────
+interface GradeGroup {
+  attemptId: string;
+  student: { id: string; full_name: string; email: string } | null;
+  totalMarks: number;
+  submittedAt: string | null;
+  responses: {
+    questionId: string;
+    questionText: string;
+    maxMarks: number;
+    answerText: string;
+    marksAwarded: number | null;
+    gradedAt: string | null;
+  }[];
+}
+
+function GradeEssays({ exam, onClose, onDone }: { exam: Exam; onClose: () => void; onDone: () => void }) {
+  const { profile } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [groups, setGroups] = useState<GradeGroup[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data: eq, error: eqErr } = await supabase
+        .from('exam_questions')
+        .select('question_id, marks, question:question_bank(question_text, type)')
+        .eq('exam_id', exam.id);
+      if (eqErr) throw eqErr;
+
+      const essayQuestions = (eq || []).filter((x: any) => x.question?.type === 'essay');
+      if (essayQuestions.length === 0) { setGroups([]); setLoading(false); return; }
+      const essayQIds = essayQuestions.map((x: any) => x.question_id);
+      const qMap = new Map(essayQuestions.map((x: any) => [x.question_id, x]));
+
+      const { data: attempts, error: attErr } = await supabase
+        .from('exam_attempts')
+        .select('id, student_id, submitted_at, status, total_marks, student:profiles(id, full_name, email)')
+        .eq('exam_id', exam.id)
+        .in('status', ['submitted', 'graded']);
+      if (attErr) throw attErr;
+      if (!attempts || attempts.length === 0) { setGroups([]); setLoading(false); return; }
+      const attemptIds = attempts.map((a: any) => a.id);
+
+      const { data: responses, error: respErr } = await supabase
+        .from('exam_responses')
+        .select('attempt_id, question_id, answer_text, marks_awarded, graded_at')
+        .in('attempt_id', attemptIds)
+        .in('question_id', essayQIds);
+      if (respErr) throw respErr;
+
+      const respByAttempt = new Map<string, any[]>();
+      (responses || []).forEach((r: any) => {
+        const arr = respByAttempt.get(r.attempt_id) || [];
+        arr.push(r);
+        respByAttempt.set(r.attempt_id, arr);
+      });
+
+      const built: GradeGroup[] = attempts
+        .map((a: any) => {
+          const resp = respByAttempt.get(a.id) || [];
+          if (resp.length === 0) return null;
+          return {
+            attemptId: a.id,
+            student: a.student,
+            totalMarks: a.total_marks,
+            submittedAt: a.submitted_at,
+            responses: resp.map((r: any) => {
+              const q = qMap.get(r.question_id);
+              return {
+                questionId: r.question_id,
+                questionText: q?.question?.question_text || '',
+                maxMarks: q?.marks ?? 0,
+                answerText: r.answer_text || '',
+                marksAwarded: r.marks_awarded,
+                gradedAt: r.graded_at,
+              };
+            }),
+          };
+        })
+        .filter((g: GradeGroup | null): g is GradeGroup => g !== null);
+
+      setGroups(built);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load submissions for grading.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, [exam.id]);
+
+  const saveResponse = async (attemptId: string, questionId: string, maxMarks: number) => {
+    const key = `${attemptId}:${questionId}`;
+    const raw = drafts[key];
+    const value = raw !== undefined ? parseFloat(raw) : NaN;
+    if (isNaN(value)) { setError('Enter a valid mark before saving.'); return; }
+    if (value < 0 || value > maxMarks) { setError(`Marks must be between 0 and ${maxMarks}.`); return; }
+    setError('');
+    setSaving(key);
+    try {
+      const { error: updErr } = await supabase
+        .from('exam_responses')
+        .update({ marks_awarded: value, is_correct: value > 0, graded_by: profile!.id, graded_at: new Date().toISOString() })
+        .eq('attempt_id', attemptId)
+        .eq('question_id', questionId);
+      if (updErr) throw updErr;
+
+      // Recompute the attempt's total score across ALL its responses (auto-graded + essay)
+      const { data: allResp, error: allErr } = await supabase
+        .from('exam_responses')
+        .select('marks_awarded, graded_at, question:question_bank(type)')
+        .eq('attempt_id', attemptId);
+      if (allErr) throw allErr;
+
+      const score = (allResp || []).reduce((s: number, r: any) => s + (r.marks_awarded || 0), 0);
+      const stillPending = (allResp || []).some((r: any) => r.question?.type === 'essay' && !r.graded_at);
+
+      const { error: attErr } = await supabase
+        .from('exam_attempts')
+        .update({ score, status: stillPending ? 'submitted' : 'graded' })
+        .eq('id', attemptId);
+      if (attErr) throw attErr;
+
+      await load();
+    } catch (err: any) {
+      setError(err.message || 'Failed to save grade.');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title={`Grade Essay Responses — ${exam.title}`} maxW="max-w-4xl">
+      {loading ? (
+        <div className="p-12 flex justify-center"><Spinner /></div>
+      ) : (
+        <div className="flex flex-col max-h-[75vh] p-6 pt-2">
+          {error && (
+            <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-danger-700 bg-danger-50 border border-danger-200 rounded-xl px-4 py-3">
+              <AlertTriangle size={16} className="shrink-0" /> {error}
+            </div>
+          )}
+          {groups.length === 0 ? (
+            <EmptyState
+              icon={<UserCheck size={32} className="text-primary-400" />}
+              title="Nothing to grade yet"
+              description="No essay responses have been submitted for this assessment."
+            />
+          ) : (
+            <div className="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar">
+              {groups.map((g) => (
+                <div key={g.attemptId} className="bg-slate-50 rounded-2xl border border-slate-200 p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <div>
+                      <p className="font-bold text-slate-800">{g.student?.full_name || g.student?.email || 'Student'}</p>
+                      <p className="text-xs text-slate-400">Submitted {g.submittedAt ? formatDateTime(g.submittedAt) : '—'}</p>
+                    </div>
+                    <Badge color="slate">{g.totalMarks} total marks</Badge>
+                  </div>
+                  <div className="space-y-4">
+                    {g.responses.map((r) => {
+                      const key = `${g.attemptId}:${r.questionId}`;
+                      const graded = !!r.gradedAt;
+                      return (
+                        <div key={key} className="bg-white rounded-xl border border-slate-100 p-4">
+                          <p className="text-sm font-semibold text-slate-700 mb-2">{r.questionText}</p>
+                          <p className="text-sm text-slate-600 bg-slate-50 rounded-lg p-3 mb-3 whitespace-pre-wrap">
+                            {r.answerText || <span className="italic text-slate-400">No answer provided</span>}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <Input
+                              type="number"
+                              min={0}
+                              max={r.maxMarks}
+                              step="0.5"
+                              placeholder={`0–${r.maxMarks}`}
+                              defaultValue={r.marksAwarded ?? undefined}
+                              onChange={(e) => setDrafts((d) => ({ ...d, [key]: e.target.value }))}
+                              className="w-28"
+                            />
+                            <span className="text-xs text-slate-400">/ {r.maxMarks} marks</span>
+                            <Button
+                              size="sm"
+                              variant={graded ? 'secondary' : 'gradient'}
+                              disabled={saving === key}
+                              onClick={() => saveResponse(g.attemptId, r.questionId, r.maxMarks)}
+                            >
+                              {saving === key ? 'Saving...' : graded ? 'Update Grade' : 'Save Grade'}
+                            </Button>
+                            {graded && <Badge color="success">Graded</Badge>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex justify-end pt-6 mt-4 border-t border-slate-100">
+            <Button variant="gradient" onClick={onDone} size="lg" className="px-8 shadow-md">Done Grading</Button>
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }

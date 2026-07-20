@@ -243,6 +243,61 @@ export interface LectureAttachment {
   created_at: string;
 }
 
+export interface RubricCriterion {
+  criterion: string;
+  max_points: number;
+  description?: string;
+}
+
+export interface Assignment {
+  id: string;
+  course_id: string;
+  professor_id: string;
+  title: string;
+  description: string;
+  instructions: string;
+  due_date: string | null;
+  max_score: number;
+  rubric: RubricCriterion[];
+  status: 'draft' | 'published' | 'closed';
+  created_at: string;
+  updated_at: string;
+  course?: Pick<Course, 'id' | 'title'>;
+}
+
+export interface AssignmentSubmission {
+  id: string;
+  assignment_id: string;
+  student_id: string;
+  file_url: string;
+  file_name: string;
+  file_size_bytes: number;
+  submitted_at: string;
+  status: 'submitted' | 'graded' | 'late';
+  score: number | null;
+  feedback: string | null;
+  graded_by: string | null;
+  graded_at: string | null;
+  student?: Pick<Profile, 'id' | 'full_name' | 'email'>;
+}
+
+const ASSIGNMENT_SUBMISSIONS_BUCKET = 'assignment-submissions';
+
+/** Upload a student's submission file to Storage and return its storage path. */
+export const uploadAssignmentSubmissionFile = async (assignmentId: string, studentId: string, file: File) => {
+  const path = `${assignmentId}/${studentId}/${Date.now()}_${file.name}`;
+  const { error } = await supabase.storage.from(ASSIGNMENT_SUBMISSIONS_BUCKET).upload(path, file, { upsert: true });
+  if (error) throw error;
+  return path;
+};
+
+/** Get a short-lived signed URL to view/download a submission file. */
+export const getAssignmentSubmissionUrl = async (path: string) => {
+  const { data, error } = await supabase.storage.from(ASSIGNMENT_SUBMISSIONS_BUCKET).createSignedUrl(path, 3600);
+  if (error) throw error;
+  return data.signedUrl;
+};
+
 // Lecture API
 export const createLecture = async (data: Lecture) => supabase.from('lectures').insert(data);
 export const updateLecture = async (id: string, data: Partial<Lecture>) => supabase.from('lectures').update(data).eq('id', id);
