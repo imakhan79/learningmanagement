@@ -1,11 +1,33 @@
 import { useEffect, useState, useRef } from 'react';
 import {
   ScrollText, Plus, Play, CheckCircle2, Clock, Award,
-  Settings, UserCheck, AlertTriangle, FileText, Activity, Save, Shuffle, AlertCircle
+  Settings, UserCheck, AlertTriangle, FileText, Activity, Save, Shuffle, AlertCircle,
+  LayoutTemplate, Dices, Trash2, Repeat
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
-import { supabase, Exam, QuestionBankItem, Course, ExamAttempt } from '../lib/supabase';
+import { supabase, Exam, QuestionBankItem, Course, ExamAttempt, ExamTemplate } from '../lib/supabase';
 import { Button, Card, Input, Textarea, Select, Badge, Spinner, EmptyState, Modal, formatDateTime } from '../components/ui';
+
+// Deterministic shuffle seeded by a string (attempt id + question id) so option/question
+// order stays stable across reloads of the same attempt — a fresh Math.random() shuffle on
+// every remount would desync previously-saved answers from what the student sees on resume.
+function seededShuffle<T>(arr: T[], seed: string): T[] {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  let state = (h >>> 0) || 1;
+  const rand = () => {
+    state ^= state << 13; state >>>= 0;
+    state ^= state >>> 17;
+    state ^= state << 5; state >>>= 0;
+    return state / 4294967296;
+  };
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 export default function ExamsPage() {
   const { profile } = useAuth();
@@ -19,6 +41,8 @@ export default function ExamsPage() {
   const [taking, setTaking] = useState<Exam | null>(null);
   const [viewingResult, setViewingResult] = useState<ExamAttempt | null>(null);
   const [grading, setGrading] = useState<Exam | null>(null);
+  const [templates, setTemplates] = useState<ExamTemplate[]>([]);
+  const [managingTemplates, setManagingTemplates] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -96,6 +120,8 @@ export default function ExamsPage() {
       if (role === 'professor') cq = cq.eq('professor_id', profile!.id);
       const { data: cs } = await cq;
       setCourses(cs as Course[] || []);
+      const { data: ts } = await supabase.from('exam_templates').select('*').order('created_at', { ascending: false });
+      setTemplates((ts as ExamTemplate[]) || []);
     }
     setLoading(false);
   };
@@ -122,9 +148,14 @@ export default function ExamsPage() {
           </p>
         </div>
         {role !== 'student' && (
-          <Button variant="gradient" onClick={() => { setEditing(null); setShowForm(true); }}>
-            <Plus size={16} /> New Assessment
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setManagingTemplates(true)}>
+              <LayoutTemplate size={16} /> Templates
+            </Button>
+            <Button variant="gradient" onClick={() => { setEditing(null); setShowForm(true); }}>
+              <Plus size={16} /> New Assessment
+            </Button>
+          </div>
         )}
       </div>
 
@@ -229,17 +260,18 @@ export default function ExamsPage() {
         </div>
       )}
 
-      {showForm && <ExamForm exam={editing} courses={courses} onClose={() => setShowForm(false)} onSaved={() => { setShowForm(false); load(); }} />}
+      {showForm && <ExamForm exam={editing} courses={courses} templates={templates} onClose={() => setShowForm(false)} onSaved={() => { setShowForm(false); load(); }} />}
       {managing && <ManageQuestions exam={managing} onClose={() => setManaging(null)} onDone={() => { setManaging(null); load(); }} />}
       {taking && <TakeExam exam={taking} onClose={() => { setTaking(null); load(); }} />}
       {viewingResult && <ExamResult attempt={viewingResult} onClose={() => setViewingResult(null)} />}
       {grading && <GradeEssays exam={grading} onClose={() => setGrading(null)} onDone={() => { setGrading(null); load(); }} />}
+      {managingTemplates && <TemplatesManager courses={courses} onClose={() => setManagingTemplates(false)} onDone={() => { setManagingTemplates(false); load(); }} />}
     </div>
   );
 }
 
 // ─── Exam Form ────────────────────────────────────────────────────────────────
-function ExamForm({ exam, courses, onClose, onSaved }: { exam: Exam | null; courses: Course[]; onClose: () => void; onSaved: () => void }) {
+function ExamForm({ exam, courses, templates, onClose, onSaved }: { exam: Exam | null; courses: Course[]; templates: ExamTemplate[]; onClose: () => void; onSaved: () => void }) {
   const { profile } = useAuth();
   const [title, setTitle] = useState(exam?.title || '');
   const [description, setDescription] = useState(exam?.description || '');
@@ -251,7 +283,17 @@ function ExamForm({ exam, courses, onClose, onSaved }: { exam: Exam | null; cour
   const [shuffleO, setShuffleO] = useState(exam?.shuffle_options ?? true);
   const [allowResume, setAllowResume] = useState(exam?.allow_resume ?? true);
   const [autoEval, setAutoEval] = useState(exam?.auto_evaluate ?? true);
+  const [templateId, setTemplateId] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const applyTemplate = (id: string) => {
+    setTemplateId(id);
+    const t = templates.find((tt) => tt.id === id);
+    if (!t) return;
+    if (t.course_id) setCourseId(t.course_id);
+    if (t.duration_seconds) setDuration(String(Math.round(t.duration_seconds / 60)));
+    if (!title) setTitle(t.name);
+  };
 
   const save = async () => {
     setSaving(true);
@@ -263,8 +305,19 @@ function ExamForm({ exam, courses, onClose, onSaved }: { exam: Exam | null; cour
       allow_resume: allowResume, auto_evaluate: autoEval,
       created_by: profile!.id,
     };
-    if (exam) await supabase.from('exams').update(payload).eq('id', exam.id);
-    else await supabase.from('exams').insert(payload);
+    if (exam) {
+      await supabase.from('exams').update(payload).eq('id', exam.id);
+    } else {
+      const { data: newExam } = await supabase.from('exams').insert(payload).select().single();
+      if (newExam && templateId) {
+        const { data: tqs } = await supabase.from('exam_template_questions').select('question_id').eq('template_id', templateId);
+        if (tqs?.length) {
+          await supabase.from('exam_questions').insert(
+            tqs.map((tq: any, i: number) => ({ exam_id: newExam.id, question_id: tq.question_id, order_index: i }))
+          );
+        }
+      }
+    }
     setSaving(false);
     onSaved();
   };
@@ -272,6 +325,15 @@ function ExamForm({ exam, courses, onClose, onSaved }: { exam: Exam | null; cour
   return (
     <Modal open onClose={onClose} title={exam ? 'Edit Assessment' : 'New Assessment'} maxW="max-w-2xl">
       <div className="space-y-6 p-6 pt-2">
+        {!exam && templates.length > 0 && (
+          <div>
+            <label className="label flex items-center gap-1.5"><LayoutTemplate size={14} /> Start from Template (optional)</label>
+            <Select value={templateId} onChange={(e) => applyTemplate(e.target.value)}>
+              <option value="">— Blank assessment —</option>
+              {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </Select>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-5">
           <div>
             <label className="label">Assessment Title</label>
@@ -344,20 +406,36 @@ function ManageQuestions({ exam, onClose, onDone }: { exam: Exam; onClose: () =>
   const { profile } = useAuth();
   const [questions, setQuestions] = useState<QuestionBankItem[]>([]);
   const [assigned, setAssigned] = useState<Set<string>>(new Set());
+  const [usedElsewhere, setUsedElsewhere] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [showPool, setShowPool] = useState(false);
+  const [poolSubject, setPoolSubject] = useState('all');
+  const [poolDifficulty, setPoolDifficulty] = useState('all');
+  const [poolCount, setPoolCount] = useState('5');
+  const [avoidRepeats, setAvoidRepeats] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      let qb = supabase.from('question_bank').select('*').eq('status', 'approved').order('created_at', { ascending: false });
-      const { data: qs } = await qb;
-      const { data: eq } = await supabase.from('exam_questions').select('question_id').eq('exam_id', exam.id);
-      
-      setQuestions(qs || []);
-      setAssigned(new Set((eq || []).map((x) => x.question_id)));
-      setLoading(false);
-    })();
-  }, [exam.id, profile?.id, profile?.role]);
+  const load = async () => {
+    setLoading(true);
+    const { data: qs } = await supabase.from('question_bank').select('*').eq('status', 'approved').order('created_at', { ascending: false });
+    const { data: eq } = await supabase.from('exam_questions').select('question_id').eq('exam_id', exam.id);
+    setQuestions(qs || []);
+    setAssigned(new Set((eq || []).map((x) => x.question_id)));
+
+    // "Avoid repeated questions": flag questions already used in other exams of this course
+    // so professors can steer clear of reusing the same questions attempt over attempt.
+    const { data: otherExams } = await supabase.from('exams').select('id').eq('course_id', exam.course_id).neq('id', exam.id);
+    const otherIds = (otherExams || []).map((e) => e.id);
+    if (otherIds.length) {
+      const { data: usedQs } = await supabase.from('exam_questions').select('question_id').in('exam_id', otherIds);
+      setUsedElsewhere(new Set((usedQs || []).map((x) => x.question_id)));
+    } else {
+      setUsedElsewhere(new Set());
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [exam.id, profile?.id, profile?.role]);
 
   const toggle = async (qid: string) => {
     if (assigned.has(qid)) {
@@ -369,14 +447,32 @@ function ManageQuestions({ exam, onClose, onDone }: { exam: Exam; onClose: () =>
     }
   };
 
+  const subjects = Array.from(new Set(questions.map((q) => q.subject).filter(Boolean)));
+
+  const addFromPool = async () => {
+    const n = parseInt(poolCount) || 0;
+    if (n <= 0) return;
+    let pool = questions.filter((q) => !assigned.has(q.id));
+    if (poolSubject !== 'all') pool = pool.filter((q) => q.subject === poolSubject);
+    if (poolDifficulty !== 'all') pool = pool.filter((q) => q.difficulty === poolDifficulty);
+    if (avoidRepeats) pool = pool.filter((q) => !usedElsewhere.has(q.id));
+    const picked = seededShuffle(pool, `${exam.id}:${Date.now()}`).slice(0, n);
+    if (!picked.length) return;
+    const startIndex = assigned.size;
+    await supabase.from('exam_questions').insert(
+      picked.map((q, i) => ({ exam_id: exam.id, question_id: q.id, order_index: startIndex + i }))
+    );
+    setAssigned((s) => { const next = new Set(s); picked.forEach((q) => next.add(q.id)); return next; });
+  };
+
   const filtered = questions.filter((q) => !search || q.question_text.toLowerCase().includes(search.toLowerCase()) || q.category?.toLowerCase().includes(search.toLowerCase()));
   const totalMarks = Array.from(assigned).reduce((acc, id) => acc + (questions.find(q => q.id === id)?.marks || 0), 0);
 
   return (
     <Modal open onClose={onClose} title={`Manage Questions — ${exam.title}`} maxW="max-w-4xl">
       {loading ? <div className="p-12 flex justify-center"><Spinner /></div> : (
-        <div className="flex flex-col h-[75vh] p-6 pt-2">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-inner-soft">
+        <div className="flex flex-col h-[80vh] p-6 pt-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-inner-soft">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl bg-primary-100 text-primary-600 flex items-center justify-center font-black text-xl shadow-sm">
                 {assigned.size}
@@ -386,19 +482,40 @@ function ManageQuestions({ exam, onClose, onDone }: { exam: Exam; onClose: () =>
                 <p className="text-xs font-bold text-primary-600 uppercase tracking-widest">{totalMarks} Total Marks</p>
               </div>
             </div>
-            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search question bank..." className="sm:w-72 bg-white shadow-sm" />
+            <div className="flex gap-2">
+              <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search question bank..." className="sm:w-56 bg-white shadow-sm" />
+              <Button variant="outline" size="sm" onClick={() => setShowPool(!showPool)}>
+                <Dices size={14} /> Pool Picker
+              </Button>
+            </div>
           </div>
-          
+
+          {showPool && (
+            <div className="mb-4 p-4 rounded-2xl border border-primary-100 bg-primary-50/50 grid grid-cols-2 sm:grid-cols-5 gap-3 items-end">
+              <Select label="Subject" value={poolSubject} onChange={(e) => setPoolSubject(e.target.value)}
+                options={[{ value: 'all', label: 'Any subject' }, ...subjects.map((s) => ({ value: s, label: s }))]} />
+              <Select label="Difficulty" value={poolDifficulty} onChange={(e) => setPoolDifficulty(e.target.value)}
+                options={[{ value: 'all', label: 'Any difficulty' }, { value: 'easy', label: 'Easy' }, { value: 'medium', label: 'Medium' }, { value: 'hard', label: 'Hard' }]} />
+              <Input label="How many" type="number" min={1} value={poolCount} onChange={(e) => setPoolCount(e.target.value)} />
+              <label className="flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer pb-2.5">
+                <input type="checkbox" checked={avoidRepeats} onChange={(e) => setAvoidRepeats(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-primary-600" />
+                <Repeat size={13} className="text-slate-400" /> Avoid repeats
+              </label>
+              <Button onClick={addFromPool} size="sm"><Dices size={14} /> Add Random</Button>
+            </div>
+          )}
+
           <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
             {filtered.map((q) => {
               const isAssigned = assigned.has(q.id);
+              const reused = usedElsewhere.has(q.id);
               return (
-                <div 
-                  key={q.id} 
+                <div
+                  key={q.id}
                   onClick={() => toggle(q.id)}
                   className={`flex items-start gap-4 p-4 rounded-2xl cursor-pointer transition-all border-2 group ${
-                    isAssigned 
-                      ? 'bg-primary-50/50 border-primary-200 shadow-sm' 
+                    isAssigned
+                      ? 'bg-primary-50/50 border-primary-200 shadow-sm'
                       : 'bg-white border-transparent hover:border-slate-200 hover:shadow-sm'
                   }`}
                 >
@@ -412,6 +529,7 @@ function ManageQuestions({ exam, onClose, onDone }: { exam: Exam; onClose: () =>
                       <Badge color={q.difficulty === 'hard' ? 'danger' : q.difficulty === 'medium' ? 'warning' : 'success'}>{q.difficulty}</Badge>
                       <Badge color="slate" className="bg-slate-100 text-slate-600">{q.type.replace('_', ' ')}</Badge>
                       {q.category && <Badge color="purple" className="bg-purple-100 text-purple-700">{q.category}</Badge>}
+                      {reused && <Badge color="amber"><Repeat size={10} /> Used in another exam</Badge>}
                       <span className="text-xs font-black text-slate-400 bg-slate-100 px-2 py-1 rounded-md ml-auto">{q.marks} Marks</span>
                     </div>
                     <p className="text-sm font-medium text-slate-700 line-clamp-3 leading-relaxed">{q.question_text}</p>
@@ -439,7 +557,7 @@ function ManageQuestions({ exam, onClose, onDone }: { exam: Exam; onClose: () =>
 // ─── Take Exam ────────────────────────────────────────────────────────────────
 function TakeExam({ exam, onClose }: { exam: Exam; onClose: () => void }) {
   const { profile } = useAuth();
-  const [questions, setQuestions] = useState<(QuestionBankItem & { examMarks: number })[]>([]);
+  const [questions, setQuestions] = useState<(QuestionBankItem & { examMarks: number; displayOptions: string[]; optionOrder: number[] })[]>([]);
   const [attempt, setAttempt] = useState<ExamAttempt | null>(null);
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
@@ -456,51 +574,68 @@ function TakeExam({ exam, onClose }: { exam: Exam; onClose: () => void }) {
     (async () => {
       // Fetch questions
       const { data: eq } = await supabase.from('exam_questions').select('question_id, order_index, question:question_bank(*)').eq('exam_id', exam.id);
-      
-      let qs = (eq || []).filter((x: any) => x.question).map((x: any) => ({ ...x.question, examMarks: x.question.marks })).filter((q) => q.id);
-      
-      if (exam.shuffle_questions) {
-        qs = qs.sort(() => Math.random() - 0.5);
-      } else {
-        // Assume sorting by order_index if available
-        qs = qs.sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0));
-      }
+      const rawQs = (eq || [])
+        .filter((x: any) => x.question)
+        .map((x: any) => ({ ...x.question, examMarks: x.question.marks, orderIndex: x.order_index }))
+        .filter((q: any) => q.id);
 
-      setQuestions(qs);
-
-      // Setup or fetch attempt
+      // Setup or fetch attempt first — shuffles below are seeded by attempt id so a page
+      // reload during the attempt reproduces the exact same order the student already saw.
       const { data: att } = await supabase.from('exam_attempts').select('*').eq('exam_id', exam.id).eq('student_id', profile!.id).maybeSingle();
-      
+
+      let activeAttempt: ExamAttempt | null = null;
+      let savedAnswers: any[] = [];
+
       if (att && att.status === 'in_progress') {
+        activeAttempt = att;
         setAttempt(att);
-        
-        // Load saved answers
         const { data: ans } = await supabase.from('exam_responses').select('*').eq('attempt_id', att.id);
-        const am: Record<string, any> = {};
-        (ans || []).forEach((a: any) => {
-          if (a.selected_option_ids) am[a.question_id] = a.selected_option_ids;
-          else if (a.answer_text) am[a.question_id] = a.answer_text;
-        });
-        setAnswers(am);
-        
-        // Calculate remaining time
+        savedAnswers = ans || [];
         const elapsed = Math.floor((new Date().getTime() - new Date(att.started_at).getTime()) / 1000);
         const remaining = Math.max(0, (exam.duration_minutes * 60) - elapsed);
         setTimeLeft(remaining);
-        
-      } else if (!att || (exam.allow_resume && att.status === 'in_progress')) {
-        // Create new attempt
-        const total_marks = qs.reduce((s, q) => s + (q.examMarks || 0), 0);
-        const { data: newAtt } = await supabase.from('exam_attempts').insert({ 
-          exam_id: exam.id, 
-          student_id: profile!.id, 
-          total_marks 
+      } else if (!att) {
+        const total_marks = rawQs.reduce((s, q) => s + (q.examMarks || 0), 0);
+        const { data: newAtt } = await supabase.from('exam_attempts').insert({
+          exam_id: exam.id,
+          student_id: profile!.id,
+          total_marks
         }).select().single();
+        activeAttempt = newAtt;
         setAttempt(newAtt);
       } else {
         // Already completed
         setResult({ score: att.score, total: att.total_marks, pct: att.total_marks ? (att.score / att.total_marks) * 100 : 0 });
+        setLoading(false);
+        return;
       }
+
+      const seedBase = activeAttempt!.id;
+      let qs = exam.shuffle_questions
+        ? seededShuffle(rawQs, `${seedBase}:qorder`)
+        : [...rawQs].sort((a: any, b: any) => (a.orderIndex || 0) - (b.orderIndex || 0));
+
+      qs = qs.map((q: any) => {
+        const optionOrder = exam.shuffle_options && (q.type === 'mcq' || q.type === 'multiple_select') && q.options?.length
+          ? seededShuffle(q.options.map((_: any, i: number) => i), `${seedBase}:${q.id}:opts`)
+          : (q.options || []).map((_: any, i: number) => i);
+        return { ...q, optionOrder, displayOptions: optionOrder.map((i: number) => q.options[i]) };
+      });
+      setQuestions(qs);
+
+      if (savedAnswers.length) {
+        const qMap = new Map(qs.map((q: any) => [q.id, q]));
+        const am: Record<string, any> = {};
+        savedAnswers.forEach((a: any) => {
+          if (a.selected_option_ids) {
+            const q: any = qMap.get(a.question_id);
+            // mcq stores a single selected index client-side; multiple_select keeps the array
+            am[a.question_id] = q?.type === 'multiple_select' ? a.selected_option_ids : a.selected_option_ids[0];
+          } else if (a.answer_text) am[a.question_id] = a.answer_text;
+        });
+        setAnswers(am);
+      }
+
       setLoading(false);
     })();
   }, [exam.id, profile?.id]);
@@ -722,20 +857,24 @@ function TakeExam({ exam, onClose }: { exam: Exam; onClose: () => void }) {
                   </p>
                   
                   <div className="space-y-4 mt-auto">
-                    {currentQ.type === 'mcq' && (currentQ.options || []).map((o, oi) => (
-                      <label key={oi} onClick={() => setAnswer(currentQ.id, oi, true)} className={`flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all group ${
-                        answers[currentQ.id] === oi ? 'border-primary-500 bg-primary-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-primary-200 hover:bg-slate-50'
-                      }`}>
-                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                          answers[currentQ.id] === oi ? 'border-primary-600' : 'border-slate-300 group-hover:border-primary-400'
+                    {currentQ.type === 'mcq' && (currentQ.displayOptions || currentQ.options || []).map((o, di) => {
+                      const oi = currentQ.optionOrder ? currentQ.optionOrder[di] : di;
+                      return (
+                        <label key={oi} onClick={() => setAnswer(currentQ.id, oi, true)} className={`flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all group ${
+                          answers[currentQ.id] === oi ? 'border-primary-500 bg-primary-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-primary-200 hover:bg-slate-50'
                         }`}>
-                          {answers[currentQ.id] === oi && <div className="w-3 h-3 rounded-full bg-primary-600" />}
-                        </div>
-                        <span className="text-lg text-slate-700 font-medium">{o}</span>
-                      </label>
-                    ))}
+                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                            answers[currentQ.id] === oi ? 'border-primary-600' : 'border-slate-300 group-hover:border-primary-400'
+                          }`}>
+                            {answers[currentQ.id] === oi && <div className="w-3 h-3 rounded-full bg-primary-600" />}
+                          </div>
+                          <span className="text-lg text-slate-700 font-medium">{o}</span>
+                        </label>
+                      );
+                    })}
 
-                    {currentQ.type === 'multiple_select' && (currentQ.options || []).map((o, oi) => {
+                    {currentQ.type === 'multiple_select' && (currentQ.displayOptions || currentQ.options || []).map((o, di) => {
+                      const oi = currentQ.optionOrder ? currentQ.optionOrder[di] : di;
                       const sel: number[] = answers[currentQ.id] || [];
                       const isSelected = sel.includes(oi);
                       return (
@@ -1180,6 +1319,160 @@ function GradeEssays({ exam, onClose, onDone }: { exam: Exam; onClose: () => voi
           </div>
         </div>
       )}
+    </Modal>
+  );
+}
+
+// ─── Templates Manager ──────────────────────────────────────────────────────
+function TemplatesManager({ courses, onClose, onDone }: { courses: Course[]; onClose: () => void; onDone: () => void }) {
+  const [templates, setTemplates] = useState<ExamTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<ExamTemplate | 'new' | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('exam_templates').select('*').order('created_at', { ascending: false });
+    setTemplates((data as ExamTemplate[]) || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const remove = async (t: ExamTemplate) => {
+    if (!confirm(`Delete template "${t.name}"? Exams already created from it are unaffected.`)) return;
+    await supabase.from('exam_templates').delete().eq('id', t.id);
+    load();
+  };
+
+  if (editing) {
+    return (
+      <TemplateEditor
+        template={editing === 'new' ? null : editing}
+        courses={courses}
+        onClose={() => setEditing(null)}
+        onSaved={() => { setEditing(null); load(); }}
+      />
+    );
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Exam Templates" maxW="max-w-2xl">
+      <div className="p-6 pt-2 space-y-4">
+        <div className="flex justify-between items-center">
+          <p className="text-sm text-slate-500">Reusable question sets professors can start a new assessment from.</p>
+          <Button size="sm" onClick={() => setEditing('new')}><Plus size={14} /> New Template</Button>
+        </div>
+        {loading ? <Spinner /> : templates.length === 0 ? (
+          <EmptyState icon={<LayoutTemplate size={32} className="text-primary-400" />} title="No templates yet" description="Create one to speed up building future exams." />
+        ) : (
+          <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1 custom-scrollbar">
+            {templates.map((t) => (
+              <div key={t.id} className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-slate-50 hover:shadow-sm transition-shadow">
+                <div>
+                  <p className="font-bold text-slate-800">{t.name}</p>
+                  <p className="text-xs text-slate-500">{courses.find((c) => c.id === t.course_id)?.title || 'Any course'} • {Math.round(t.duration_seconds / 60)}m • {t.total_marks} marks</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => setEditing(t)}>Edit</Button>
+                  <Button size="sm" variant="ghost" onClick={() => remove(t)}><Trash2 size={14} className="text-red-500" /></Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex justify-end pt-4 border-t border-slate-100">
+          <Button variant="gradient" onClick={onDone}>Done</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function TemplateEditor({ template, courses, onClose, onSaved }: { template: ExamTemplate | null; courses: Course[]; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState(template?.name || '');
+  const [courseId, setCourseId] = useState(template?.course_id || courses[0]?.id || '');
+  const [durationMin, setDurationMin] = useState(String(template ? Math.round(template.duration_seconds / 60) : 60));
+  const [questions, setQuestions] = useState<QuestionBankItem[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { data: qs } = await supabase.from('question_bank').select('*').eq('status', 'approved').order('created_at', { ascending: false });
+      setQuestions(qs || []);
+      if (template) {
+        const { data: tqs } = await supabase.from('exam_template_questions').select('question_id').eq('template_id', template.id);
+        setSelected(new Set((tqs || []).map((x: any) => x.question_id)));
+      }
+      setLoading(false);
+    })();
+  }, [template?.id]);
+
+  const toggle = (qid: string) => setSelected((s) => { const n = new Set(s); n.has(qid) ? n.delete(qid) : n.add(qid); return n; });
+  const totalMarks = Array.from(selected).reduce((acc, id) => acc + (questions.find((q) => q.id === id)?.marks || 0), 0);
+  const filtered = questions.filter((q) => !search || q.question_text.toLowerCase().includes(search.toLowerCase()));
+
+  const save = async () => {
+    if (!name || selected.size === 0) return;
+    setSaving(true);
+    const payload = { name, course_id: courseId || null, total_marks: totalMarks, duration_seconds: (parseInt(durationMin) || 60) * 60 };
+    let templateId = template?.id;
+    if (template) {
+      await supabase.from('exam_templates').update(payload).eq('id', template.id);
+      await supabase.from('exam_template_questions').delete().eq('template_id', template.id);
+    } else {
+      const { data: newT } = await supabase.from('exam_templates').insert(payload).select().single();
+      templateId = newT?.id;
+    }
+    if (templateId && selected.size) {
+      await supabase.from('exam_template_questions').insert(Array.from(selected).map((qid) => ({ template_id: templateId, question_id: qid, quantity: 1 })));
+    }
+    setSaving(false);
+    onSaved();
+  };
+
+  return (
+    <Modal open onClose={onClose} title={template ? 'Edit Template' : 'New Template'} maxW="max-w-3xl">
+      <div className="flex flex-col h-[80vh] p-6 pt-2">
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <Input label="Template Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Standard Midterm" />
+          <Select label="Course" value={courseId} onChange={(e) => setCourseId(e.target.value)} options={[{ value: '', label: 'Any course' }, ...courses.map((c) => ({ value: c.id, label: c.title }))]} />
+          <Input label="Duration (minutes)" type="number" value={durationMin} onChange={(e) => setDurationMin(e.target.value)} />
+        </div>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-bold text-primary-600 uppercase tracking-widest">{selected.size} questions • {totalMarks} marks</p>
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search question bank..." className="w-64" />
+        </div>
+        {loading ? <Spinner /> : (
+          <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+            {filtered.map((q) => {
+              const isSel = selected.has(q.id);
+              return (
+                <div key={q.id} onClick={() => toggle(q.id)} className={`flex items-start gap-3 p-3 rounded-xl cursor-pointer border-2 transition-all ${isSel ? 'bg-primary-50/50 border-primary-200' : 'bg-white border-transparent hover:border-slate-200'}`}>
+                  <div className={`w-5 h-5 mt-0.5 rounded border-2 flex items-center justify-center shrink-0 ${isSel ? 'bg-primary-500 border-primary-500 text-white' : 'border-slate-300 text-transparent'}`}>
+                    <CheckCircle2 size={13} className={isSel ? 'opacity-100' : 'opacity-0'} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                      <Badge color="slate">{q.type.replace('_', ' ')}</Badge>
+                      <span className="text-xs text-slate-400">{q.marks} marks</span>
+                    </div>
+                    <p className="text-sm text-slate-700 line-clamp-2">{q.question_text}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="flex justify-end gap-2 pt-4 mt-2 border-t border-slate-100">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="gradient" onClick={save} disabled={saving || !name || selected.size === 0}>
+            {saving ? 'Saving...' : 'Save Template'}
+          </Button>
+        </div>
+      </div>
     </Modal>
   );
 }

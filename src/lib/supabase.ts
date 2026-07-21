@@ -195,6 +195,15 @@ export interface Exam {
   updated_at: string;
 }
 
+export interface ExamTemplate {
+  id: string;
+  name: string;
+  course_id: string | null;
+  total_marks: number;
+  duration_seconds: number;
+  created_at: string;
+}
+
 export interface ExamAttempt {
   id: string;
   exam_id: string;
@@ -205,6 +214,7 @@ export interface ExamAttempt {
   score: number;
   total_marks: number;
   time_spent_seconds: number;
+  auto_evaluated?: boolean;
 }
 
 export interface KpiConfig {
