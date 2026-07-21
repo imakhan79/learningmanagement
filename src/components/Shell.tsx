@@ -1,10 +1,12 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard, BookOpen, Users, ClipboardList, BarChart3,
   Bell, Settings, LogOut, GraduationCap, FileText, Target,
-  ScrollText, Search, X, ChevronRight, Video, DollarSign,
+  ScrollText, Search, X, ChevronRight, DollarSign,
   User, Sparkles, Menu, Radio, Shield, Award, ClipboardCheck,
+  CalendarDays, Bookmark, Loader2,
 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { Role } from '../lib/supabase';
 
@@ -15,8 +17,10 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'courses',      label: 'Courses',         icon: <BookOpen size={18}/>,        roles: ['admin','professor','student'], group: 'main' },
   { id: 'lectures',     label: 'Lectures',        icon: <FileText size={18}/>,        roles: ['professor','student'],         group: 'main' },
   { id: 'assignments',  label: 'Assignments',     icon: <ClipboardCheck size={18}/>,  roles: ['professor','student'],         group: 'main' },
+  { id: 'library',      label: 'PDFs & Notes',    icon: <FileText size={18}/>,        roles: ['student'],                     group: 'main' },
   { id: 'live',         label: 'Live Sessions',   icon: <Radio size={18}/>,           roles: ['admin','professor','student'], group: 'main' },
   { id: 'exams',        label: 'Exams',           icon: <ScrollText size={18}/>,      roles: ['admin','professor','student'], group: 'main' },
+  { id: 'attendance',   label: 'Attendance',      icon: <CalendarDays size={18}/>,    roles: ['student'],                     group: 'main' },
   { id: 'analytics',   label: 'Analytics',       icon: <BarChart3 size={18}/>,       roles: ['admin','professor','student'], group: 'insights' },
   { id: 'kpis',        label: 'KPI Monitor',     icon: <Target size={18}/>,          roles: ['admin','professor'],           group: 'insights' },
   { id: 'reports',     label: 'Reports',         icon: <FileText size={18}/>,        roles: ['admin','professor','student'], group: 'insights' },
@@ -27,6 +31,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'audit',       label: 'Audit Logs',      icon: <Shield size={18}/>,          roles: ['admin'],                       group: 'admin' },
   { id: 'settings',    label: 'Settings',        icon: <Settings size={18}/>,        roles: ['admin'],                       group: 'admin' },
   { id: 'certificates',label: 'Certificates',    icon: <Award size={18}/>,           roles: ['student'],                     group: 'personal' },
+  { id: 'bookmarks',   label: 'Bookmarks',       icon: <Bookmark size={18}/>,        roles: ['student'],                     group: 'personal' },
   { id: 'profile',     label: 'My Profile',      icon: <User size={18}/>,            roles: ['admin','professor','student'], group: 'personal' },
 ];
 
@@ -59,6 +64,10 @@ export default function Shell({
   const { profile, signOut } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<{ id: string; label: string; sub: string; nav: string }[]>([]);
+  const [searching, setSearching] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const role = profile?.role ?? 'student';
   const items = NAV_ITEMS.filter(i => i.roles.includes(role));
   const rs = ROLE_STYLE[role] || ROLE_STYLE.student;
@@ -67,6 +76,36 @@ export default function Shell({
   const navGroups = GROUPS.map(g => ({
     ...g, items: items.filter(i => i.group === g.id),
   })).filter(g => g.items.length > 0);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!query.trim()) { setSearchResults([]); setSearching(false); return; }
+    setSearching(true);
+    searchTimer.current = setTimeout(async () => {
+      const q = query.trim();
+      const results: { id: string; label: string; sub: string; nav: string }[] = [];
+      try {
+        if (role === 'student') {
+          const { data: enr } = await supabase.from('enrollments').select('course_id').eq('student_id', profile!.id);
+          const courseIds = (enr || []).map((e: any) => e.course_id);
+          const [courses, lectures, materials] = await Promise.all([
+            supabase.from('courses').select('id, title').ilike('title', `%${q}%`).limit(5),
+            courseIds.length ? supabase.from('lectures').select('id, title, course_id').in('course_id', courseIds).ilike('title', `%${q}%`).limit(5) : Promise.resolve({ data: [] }),
+            courseIds.length ? supabase.from('course_materials').select('id, title, type').in('course_id', courseIds).ilike('title', `%${q}%`).limit(5) : Promise.resolve({ data: [] }),
+          ]);
+          (courses.data || []).forEach((c: any) => results.push({ id: `c-${c.id}`, label: c.title, sub: 'Course', nav: 'courses' }));
+          (lectures.data || []).forEach((l: any) => results.push({ id: `l-${l.id}`, label: l.title, sub: 'Lecture', nav: 'lectures' }));
+          (materials.data || []).forEach((m: any) => results.push({ id: `m-${m.id}`, label: m.title, sub: m.type === 'pdf' || m.type === 'note' || m.type === 'book' ? 'Resource' : 'Material', nav: (m.type === 'pdf' || m.type === 'note' || m.type === 'book') ? 'library' : 'lectures' }));
+        } else {
+          const { data: courses } = await supabase.from('courses').select('id, title').ilike('title', `%${q}%`).limit(8);
+          (courses || []).forEach((c: any) => results.push({ id: `c-${c.id}`, label: c.title, sub: 'Course', nav: 'courses' }));
+        }
+      } catch { /* ignore search errors */ }
+      setSearchResults(results);
+      setSearching(false);
+    }, 300);
+  }, [query, searchOpen, role, profile?.id]);
 
   const NavContent = ({ onClose }: { onClose?: () => void }) => (
     <div className="flex flex-col h-full">
@@ -222,27 +261,48 @@ export default function Shell({
         {searchOpen && (
           <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4"
                style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}
-               onClick={() => setSearchOpen(false)}>
+               onClick={() => { setSearchOpen(false); setQuery(''); }}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in"
                  onClick={e => e.stopPropagation()}>
               <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100">
                 <Search size={18} className="text-slate-400 shrink-0" />
-                <input autoFocus placeholder="Search pages, courses, users…" className="flex-1 outline-none text-sm text-slate-700 placeholder-slate-400 bg-transparent" />
-                <button onClick={() => setSearchOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search courses, lectures, resources…" className="flex-1 outline-none text-sm text-slate-700 placeholder-slate-400 bg-transparent" />
+                {searching && <Loader2 size={14} className="animate-spin text-slate-400 shrink-0" />}
+                <button onClick={() => { setSearchOpen(false); setQuery(''); }} className="text-slate-400 hover:text-slate-600">
                   <X size={16} />
                 </button>
               </div>
-              <div className="p-3">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2 mb-2">Quick Navigation</p>
-                <div className="space-y-0.5">
-                  {items.slice(0, 6).map(item => (
-                    <button key={item.id} onClick={() => { onNavigate(item.id); setSearchOpen(false); }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-slate-700 hover:bg-slate-50 hover:text-primary-700 transition-colors">
-                      <span className="text-slate-400">{item.icon}</span>
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
+              <div className="p-3 max-h-[50vh] overflow-y-auto">
+                {query.trim() ? (
+                  <>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2 mb-2">Results</p>
+                    <div className="space-y-0.5">
+                      {searchResults.map((r) => (
+                        <button key={r.id} onClick={() => { onNavigate(r.nav); setSearchOpen(false); setQuery(''); }}
+                          className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-sm text-slate-700 hover:bg-slate-50 hover:text-primary-700 transition-colors">
+                          <span className="truncate">{r.label}</span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase shrink-0">{r.sub}</span>
+                        </button>
+                      ))}
+                      {!searching && searchResults.length === 0 && (
+                        <p className="text-sm text-slate-400 text-center py-6">No results for "{query}"</p>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2 mb-2">Quick Navigation</p>
+                    <div className="space-y-0.5">
+                      {items.slice(0, 6).map(item => (
+                        <button key={item.id} onClick={() => { onNavigate(item.id); setSearchOpen(false); }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-slate-700 hover:bg-slate-50 hover:text-primary-700 transition-colors">
+                          <span className="text-slate-400">{item.icon}</span>
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>

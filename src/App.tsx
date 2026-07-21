@@ -23,6 +23,9 @@ const LivePage = lazy(() => import('./pages/LivePage'));
 const FinancePage = lazy(() => import('./pages/FinancePage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const CertificatePage = lazy(() => import('./pages/CertificatePage'));
+const AttendancePage = lazy(() => import('./pages/AttendancePage'));
+const BookmarksPage = lazy(() => import('./pages/BookmarksPage'));
+const LibraryPage = lazy(() => import('./pages/LibraryPage'));
 import { Spinner } from './components/ui';
 
 function AppInner() {
@@ -64,7 +67,7 @@ function AppInner() {
   const role = profile.role;
   const render = () => {
     switch (active) {
-      case 'dashboard': return <DashboardPage />;
+      case 'dashboard': return <DashboardPage onNavigate={setActive} />;
       case 'courses': return <CoursesPage />;
       case 'lectures': return role === 'student' || role === 'professor' ? <LecturesPage /> : <DashboardPage />;
       case 'assignments': return role === 'student' || role === 'professor' ? <AssignmentsPage /> : <DashboardPage />;
@@ -80,6 +83,9 @@ function AppInner() {
       case 'finance': return role === 'admin' || role === 'student' ? <FinancePage /> : <DashboardPage />;
       case 'profile': return <ProfilePage />;
       case 'certificates': return role === 'student' ? <CertificatePage /> : <DashboardPage />;
+      case 'attendance': return role === 'student' ? <AttendancePage /> : <DashboardPage />;
+      case 'bookmarks': return role === 'student' ? <BookmarksPage /> : <DashboardPage />;
+      case 'library': return role === 'student' ? <LibraryPage /> : <DashboardPage />;
       case 'settings': return role === 'admin' ? <SettingsPage /> : <DashboardPage />;
       default: return <DashboardPage />;
     }

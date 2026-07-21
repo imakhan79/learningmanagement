@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import {
-  ScrollText, Plus, Play, Trash2, CheckCircle2, Clock, Award,
+  ScrollText, Plus, Play, CheckCircle2, Clock, Award,
   Settings, UserCheck, AlertTriangle, FileText, Activity, Save, Shuffle, AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
@@ -446,7 +446,9 @@ function TakeExam({ exam, onClose }: { exam: Exam; onClose: () => void }) {
   const [timeLeft, setTimeLeft] = useState(exam.duration_minutes * 60);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ score: number; total: number; pct: number } | null>(null);
-  
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
   // Navigation
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -455,7 +457,7 @@ function TakeExam({ exam, onClose }: { exam: Exam; onClose: () => void }) {
       // Fetch questions
       const { data: eq } = await supabase.from('exam_questions').select('question_id, order_index, question:question_bank(*)').eq('exam_id', exam.id);
       
-      let qs = (eq || []).map((x: any) => ({ ...x.question, examMarks: x.question.marks })).filter((q) => q.id);
+      let qs = (eq || []).filter((x: any) => x.question).map((x: any) => ({ ...x.question, examMarks: x.question.marks })).filter((q) => q.id);
       
       if (exam.shuffle_questions) {
         qs = qs.sort(() => Math.random() - 0.5);
@@ -514,8 +516,28 @@ function TakeExam({ exam, onClose }: { exam: Exam; onClose: () => void }) {
     return () => clearInterval(t);
   }, [timeLeft, loading, result, submitting]);
 
-  const setAnswer = (qid: string, val: any) => {
+  const persistAnswer = async (qid: string, val: any) => {
+    if (!attempt) return;
+    const q = questions.find((qq) => qq.id === qid);
+    if (!q) return;
+    setSaveState('saving');
+    const payload = {
+      attempt_id: attempt.id,
+      question_id: qid,
+      answer_text: (q.type === 'short_answer' || q.type === 'essay' || q.type === 'true_false') ? String(val ?? '') : null,
+      selected_option_ids: (q.type === 'mcq' || q.type === 'multiple_select') ? (Array.isArray(val) ? val : [val]) : null,
+    };
+    await supabase.from('exam_responses').upsert(payload, { onConflict: 'attempt_id, question_id' });
+    setSaveState('saved');
+  };
+
+  // Debounced autosave — free-text answers save 600ms after typing stops;
+  // discrete choices (mcq/true-false) save immediately.
+  const setAnswer = (qid: string, val: any, immediate = false) => {
     setAnswers((a) => ({ ...a, [qid]: val }));
+    if (saveTimers.current[qid]) clearTimeout(saveTimers.current[qid]);
+    if (immediate) { persistAnswer(qid, val); return; }
+    saveTimers.current[qid] = setTimeout(() => persistAnswer(qid, val), 600);
   };
 
   const submit = async () => {
@@ -582,6 +604,9 @@ function TakeExam({ exam, onClose }: { exam: Exam; onClose: () => void }) {
   };
 
   const handleExitAndSave = async () => {
+    // Flush any pending debounced autosaves so no answer is lost on exit.
+    Object.values(saveTimers.current).forEach((t) => clearTimeout(t));
+    await Promise.all(Object.keys(answers).map((qid) => persistAnswer(qid, answers[qid])));
     onClose();
   };
 
@@ -634,8 +659,11 @@ function TakeExam({ exam, onClose }: { exam: Exam; onClose: () => void }) {
               <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Progress</span>
               <span className="text-sm font-black text-primary-600">{answeredCount} of {questions.length} Answered</span>
             </div>
+            <span className={`text-xs font-bold flex items-center gap-1.5 transition-opacity ${saveState === 'idle' ? 'opacity-0' : 'opacity-100'} ${saveState === 'saving' ? 'text-amber-500' : 'text-emerald-500'}`}>
+              <Save size={12} /> {saveState === 'saving' ? 'Saving…' : 'Saved'}
+            </span>
           </div>
-          
+
           <div className="flex items-center gap-4">
             <Button variant="outline" onClick={handleExitAndSave} disabled={submitting} className="font-bold border-slate-300 text-slate-600 hover:bg-slate-50">
               <Save size={16} className="mr-2" /> Save & Pause
@@ -695,7 +723,7 @@ function TakeExam({ exam, onClose }: { exam: Exam; onClose: () => void }) {
                   
                   <div className="space-y-4 mt-auto">
                     {currentQ.type === 'mcq' && (currentQ.options || []).map((o, oi) => (
-                      <label key={oi} className={`flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all group ${
+                      <label key={oi} onClick={() => setAnswer(currentQ.id, oi, true)} className={`flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all group ${
                         answers[currentQ.id] === oi ? 'border-primary-500 bg-primary-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-primary-200 hover:bg-slate-50'
                       }`}>
                         <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
@@ -706,12 +734,12 @@ function TakeExam({ exam, onClose }: { exam: Exam; onClose: () => void }) {
                         <span className="text-lg text-slate-700 font-medium">{o}</span>
                       </label>
                     ))}
-                    
+
                     {currentQ.type === 'multiple_select' && (currentQ.options || []).map((o, oi) => {
                       const sel: number[] = answers[currentQ.id] || [];
                       const isSelected = sel.includes(oi);
                       return (
-                        <label key={oi} className={`flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all group ${
+                        <label key={oi} onClick={() => setAnswer(currentQ.id, isSelected ? sel.filter((i) => i !== oi) : [...sel, oi], true)} className={`flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all group ${
                           isSelected ? 'border-primary-500 bg-primary-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-primary-200 hover:bg-slate-50'
                         }`}>
                           <div className={`w-6 h-6 rounded flex items-center justify-center shrink-0 transition-colors ${
@@ -723,13 +751,13 @@ function TakeExam({ exam, onClose }: { exam: Exam; onClose: () => void }) {
                         </label>
                       );
                     })}
-                    
+
                     {currentQ.type === 'true_false' && (
                       <div className="grid grid-cols-2 gap-5">
                         {[{ v: 'true', l: 'True' }, { v: 'false', l: 'False' }].map((o) => {
                           const isSelected = answers[currentQ.id] === o.v;
                           return (
-                            <label key={o.v} className={`flex flex-col items-center justify-center gap-3 py-8 rounded-2xl border-2 cursor-pointer transition-all group ${
+                            <label key={o.v} onClick={() => setAnswer(currentQ.id, o.v, true)} className={`flex flex-col items-center justify-center gap-3 py-8 rounded-2xl border-2 cursor-pointer transition-all group ${
                               isSelected ? 'border-primary-500 bg-primary-50/50 shadow-sm' : 'border-slate-200 bg-white hover:border-primary-200 hover:bg-slate-50'
                             }`}>
                               <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${

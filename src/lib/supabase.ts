@@ -84,8 +84,12 @@ export interface WorksheetSubmission {
   id: string;
   student_id: string;
   material_id: string;
-  status: 'submitted' | 'graded';
+  status: 'in_progress' | 'submitted' | 'graded';
+  answer_text: string;
+  score: number | null;
+  feedback: string | null;
   submitted_at: string;
+  updated_at: string;
 }
 
 export interface Enrollment {
@@ -101,8 +105,28 @@ export interface Enrollment {
 export interface Bookmark {
   id: string;
   student_id: string;
-  lecture_id: string;
+  lecture_id: string | null;
+  material_id: string | null;
   created_at: string;
+}
+
+export interface LectureAttendanceRow {
+  id: string;
+  student_id: string;
+  lecture_id: string;
+  course_id: string;
+  status: 'present' | 'absent' | 'late';
+  attended_at: string;
+  attendance_date: string;
+}
+
+export interface LectureRating {
+  id: string;
+  student_id: string;
+  lecture_id: string;
+  rating: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface LectureProgress {
@@ -404,7 +428,7 @@ export const startLectureActivity = async (lectureId: string): Promise<{ data: L
   const { data, error } = await supabase.from('lecture_activity').insert({
     lecture_id: lectureId,
     user_id: userId,
-  });
+  }).select();
   return { data, error };
 };
 

@@ -54,12 +54,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
       setSession(sess);
       setUser(sess?.user ?? null);
       if (sess?.user) {
         (async () => {
           await Promise.all([loadProfile(sess.user.id), refreshMfaStatus()]);
+          if (event === 'SIGNED_IN') {
+            supabase.from('login_events').insert({ user_id: sess.user.id }).then(() => {});
+          }
         })();
       } else {
         setProfile(null);

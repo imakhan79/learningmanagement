@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   User, Mail, Shield, Edit3, Save, X, KeyRound, Eye, EyeOff,
-  CheckCircle2, BookOpen, Award, Clock, Activity, Camera
+  CheckCircle2, BookOpen, Award, Clock, Activity, Camera, Bell, Loader2
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
-import { supabase } from '../lib/supabase';
+import { supabase, NotificationPreferences } from '../lib/supabase';
 import { Spinner, Badge } from '../components/ui';
+
+const DEFAULT_PREFS: NotificationPreferences = { in_app: true, email: true, push: false };
 
 const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   admin:     { label: 'Administrator', color: 'text-violet-700', bg: 'bg-violet-100' },
@@ -14,15 +16,24 @@ const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string }> 
 };
 
 export default function ProfilePage() {
-  const { profile, session } = useAuth();
+  const { profile, session, refreshProfile } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ courses: 0, completed: 0, hours: 0, score: 0 });
+  const [stats, setStats] = useState({ courses: 0, completed: 0, hours: 0, score: 0, certificates: 0 });
 
   // Edit profile
   const [editing, setEditing] = useState(false);
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+
+  // Avatar upload
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  // Notification preferences
+  const [prefs, setPrefs] = useState<NotificationPreferences>(DEFAULT_PREFS);
+  const [prefsSaving, setPrefsSaving] = useState(false);
 
   // Password change
   const [changingPw, setChangingPw] = useState(false);
@@ -34,6 +45,8 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!profile) return;
     setFullName(profile.full_name || '');
+    setPhone(profile.phone || '');
+    setPrefs(profile.notification_preferences || DEFAULT_PREFS);
     loadStats();
   }, [profile?.id]);
 
@@ -47,26 +60,64 @@ export default function ProfilePage() {
       const enrollments = enr.data || [];
       const progData = prog.data || [];
       const totalSecs = progData.reduce((s, p) => s + (p.total_watch_seconds || 0), 0);
+      const completed = enrollments.filter(e => e.status === 'completed' || e.progress_pct >= 100).length;
       setStats({
         courses: enrollments.length,
-        completed: enrollments.filter(e => e.status === 'completed' || e.progress_pct >= 100).length,
+        completed,
         hours: Math.round(totalSecs / 3600),
         score: 0,
+        certificates: completed,
       });
     } else if (profile?.role === 'professor') {
       const { data: courses } = await supabase.from('courses').select('id').eq('professor_id', profile.id);
-      setStats({ courses: (courses || []).length, completed: 0, hours: 0, score: 0 });
+      setStats({ courses: (courses || []).length, completed: 0, hours: 0, score: 0, certificates: 0 });
     }
     setLoading(false);
+  }
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !profile) return;
+    if (file.size > 3 * 1024 * 1024) { setSaveMsg('Failed to save: image must be under 3MB.'); return; }
+    setUploadingAvatar(true);
+    setSaveMsg('');
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `${profile.id}/avatar.${ext}`;
+      const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+      const url = `${pub.publicUrl}?t=${Date.now()}`;
+      const { error: updErr } = await supabase.from('profiles').update({ avatar_url: url }).eq('id', profile.id);
+      if (updErr) throw updErr;
+      await refreshProfile();
+      setSaveMsg('Profile photo updated!');
+      setTimeout(() => setSaveMsg(''), 3000);
+    } catch (err: any) {
+      setSaveMsg('Failed to save: ' + (err.message || 'upload error'));
+    } finally {
+      setUploadingAvatar(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  async function savePrefs(next: NotificationPreferences) {
+    if (!profile) return;
+    setPrefs(next);
+    setPrefsSaving(true);
+    await supabase.from('profiles').update({ notification_preferences: next }).eq('id', profile.id);
+    await refreshProfile();
+    setPrefsSaving(false);
   }
 
   async function handleSaveProfile() {
     if (!profile) return;
     setSaving(true);
     setSaveMsg('');
-    const { error } = await supabase.from('profiles').update({ full_name: fullName }).eq('id', profile.id);
+    const { error } = await supabase.from('profiles').update({ full_name: fullName, phone }).eq('id', profile.id);
     setSaving(false);
     if (error) { setSaveMsg('Failed to save: ' + error.message); return; }
+    await refreshProfile();
     setSaveMsg('Profile updated successfully!');
     setEditing(false);
     setTimeout(() => setSaveMsg(''), 3000);
@@ -114,12 +165,22 @@ export default function ProfilePage() {
           <div className="flex flex-col md:flex-row md:items-end gap-6">
             {/* Avatar */}
             <div className="relative group w-24 h-24 shrink-0">
-              <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary-400 to-primary-700 text-white flex items-center justify-center text-3xl font-black ring-4 ring-white shadow-xl select-none">
-                {initials}
-              </div>
-              <div className="absolute inset-0 rounded-3xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
-                <Camera size={20} className="text-white" />
-              </div>
+              {profile.avatar_url ? (
+                <img src={profile.avatar_url} alt={profile.full_name} className="w-24 h-24 rounded-3xl object-cover ring-4 ring-white shadow-xl" />
+              ) : (
+                <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary-400 to-primary-700 text-white flex items-center justify-center text-3xl font-black ring-4 ring-white shadow-xl select-none">
+                  {initials}
+                </div>
+              )}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="absolute inset-0 rounded-3xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+                aria-label="Change profile photo"
+              >
+                {uploadingAvatar ? <Loader2 size={20} className="text-white animate-spin" /> : <Camera size={20} className="text-white" />}
+              </button>
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
             </div>
 
             {/* Info */}
@@ -144,6 +205,16 @@ export default function ProfilePage() {
                       <Mail size={14} /> {profile.email}
                     </span>
                   </div>
+                  {editing ? (
+                    <input
+                      className="mt-2 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-primary-400 w-full max-w-xs"
+                      value={phone}
+                      onChange={e => setPhone(e.target.value)}
+                      placeholder="Contact phone number"
+                    />
+                  ) : profile.phone ? (
+                    <p className="text-sm text-slate-500 font-medium mt-2">{profile.phone}</p>
+                  ) : null}
                 </div>
 
                 {/* Actions */}
@@ -183,7 +254,7 @@ export default function ProfilePage() {
               <StatBox icon={<BookOpen size={22} />} label="Enrolled Courses" value={stats.courses} color="primary" />
               <StatBox icon={<CheckCircle2 size={22} />} label="Completed" value={stats.completed} color="success" />
               <StatBox icon={<Clock size={22} />} label="Learning Hours" value={`${stats.hours}h`} color="sky" />
-              <StatBox icon={<Award size={22} />} label="Certificates" value="—" color="amber" />
+              <StatBox icon={<Award size={22} />} label="Certificates" value={stats.certificates} color="amber" />
             </>
           ) : profile.role === 'professor' ? (
             <>
@@ -273,6 +344,35 @@ export default function ProfilePage() {
             </div>
             <Badge color="slate">Verified</Badge>
           </div>
+        </div>
+      </div>
+
+      {/* Notification Preferences */}
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
+        <h3 className="text-lg font-black text-slate-800 tracking-tight mb-6 flex items-center gap-2">
+          <Bell size={20} className="text-primary-500" /> Notification Preferences
+          {prefsSaving && <Loader2 size={14} className="animate-spin text-slate-400" />}
+        </h3>
+        <div className="space-y-3">
+          {([
+            { key: 'in_app' as const, label: 'In-App Notifications', desc: 'Alerts shown inside the portal (grades, assignments, announcements)' },
+            { key: 'email' as const, label: 'Email Notifications', desc: 'Receive important updates via email' },
+            { key: 'push' as const, label: 'Push Notifications', desc: 'Browser push alerts for time-sensitive events' },
+          ]).map((row) => (
+            <div key={row.key} className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl border border-slate-100">
+              <div>
+                <p className="font-bold text-slate-800">{row.label}</p>
+                <p className="text-sm text-slate-400 font-medium mt-0.5">{row.desc}</p>
+              </div>
+              <button
+                onClick={() => savePrefs({ ...prefs, [row.key]: !prefs[row.key] })}
+                className={`w-12 h-7 rounded-full transition-colors relative shrink-0 ${prefs[row.key] ? 'bg-primary-600' : 'bg-slate-300'}`}
+                aria-label={`Toggle ${row.label}`}
+              >
+                <span className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${prefs[row.key] ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
+          ))}
         </div>
       </div>
     </div>

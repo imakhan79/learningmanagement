@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react';
-import { FileText, Plus, Play, Bookmark, Download, Upload, Trash2, ArrowLeft, Clock } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  FileText, Plus, Play, Bookmark, Download, Upload, Trash2, ArrowLeft, Clock,
+  CheckCircle2, Star, Maximize, Gauge, Captions, Save, PenLine,
+} from 'lucide-react';
 import { useAuth } from '../lib/auth';
-import { supabase, Lecture, CourseMaterial, Course, startLectureActivity, updateLectureActivity, completeLectureActivity } from '../lib/supabase';
+import { supabase, Lecture, CourseMaterial, Course, WorksheetSubmission, startLectureActivity, updateLectureActivity } from '../lib/supabase';
 import { Button, Card, Input, Textarea, Select, Badge, Spinner, EmptyState, Modal, ProgressBar, formatDuration, formatDate } from '../components/ui';
 
 export default function LecturesPage() {
@@ -13,9 +16,10 @@ export default function LecturesPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Lecture | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [watching, setWatching] = useState<Lecture | null>(null);
+  const [watching, setWatching] = useState<(Lecture & { materials?: CourseMaterial[] }) | null>(null);
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set());
-  const [submissions, setSubmissions] = useState<Set<string>>(new Set());
+  const [submissions, setSubmissions] = useState<Record<string, WorksheetSubmission>>({});
+  const [worksheet, setWorksheet] = useState<CourseMaterial | null>(null);
 
   const loadCourses = async () => {
     let q = supabase.from('courses').select('*').order('created_at', { ascending: false });
@@ -40,21 +44,21 @@ export default function LecturesPage() {
     let mats: any[] = [];
     let progMap: Record<string, any> = {};
     let bmSet = new Set<string>();
-    let subSet = new Set<string>();
+    let subMap: Record<string, WorksheetSubmission> = {};
     if (ids.length) {
       const [m, p, b, s] = await Promise.all([
         supabase.from('course_materials').select('*').in('lecture_id', ids),
         role === 'student' ? supabase.from('lecture_progress').select('*').eq('student_id', profile!.id).in('lecture_id', ids) : Promise.resolve({ data: null }),
         role === 'student' ? supabase.from('bookmarks').select('lecture_id').eq('student_id', profile!.id).in('lecture_id', ids) : Promise.resolve({ data: null }),
-        role === 'student' ? supabase.from('worksheet_submissions').select('material_id').eq('student_id', profile!.id) : Promise.resolve({ data: null }),
+        role === 'student' ? supabase.from('worksheet_submissions').select('*').eq('student_id', profile!.id) : Promise.resolve({ data: null }),
       ]);
       mats = m.data || [];
       if (p.data) p.data.forEach((pp: any) => (progMap[pp.lecture_id] = pp));
-      if (b.data) b.data.forEach((bb: any) => bmSet.add(bb.lecture_id));
-      if (s.data) s.data.forEach((ss: any) => subSet.add(ss.material_id));
+      if (b.data) b.data.forEach((bb: any) => { if (bb.lecture_id) bmSet.add(bb.lecture_id); });
+      if (s.data) s.data.forEach((ss: any) => (subMap[ss.material_id] = ss));
     }
     setBookmarks(bmSet);
-    setSubmissions(subSet);
+    setSubmissions(subMap);
     setLectures((lecs || []).map((l: any) => ({ ...l, materials: mats.filter((m) => m.lecture_id === l.id), progress: progMap[l.id] })));
     setLoading(false);
   };
@@ -66,13 +70,6 @@ export default function LecturesPage() {
     } else {
       await supabase.from('bookmarks').insert({ student_id: profile!.id, lecture_id: lectureId });
       setBookmarks((s) => { const n = new Set(s); n.add(lectureId); return n; });
-    }
-  };
-
-  const submitWorksheet = async (materialId: string) => {
-    if (!submissions.has(materialId)) {
-      await supabase.from('worksheet_submissions').insert({ student_id: profile!.id, material_id: materialId, status: 'submitted' });
-      setSubmissions((s) => { const n = new Set(s); n.add(materialId); return n; });
     }
   };
 
@@ -167,8 +164,16 @@ export default function LecturesPage() {
                           <Download size={13} className="text-slate-400" /> {m.title} <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase text-[10px]">{m.type}</span>
                         </a>
                         {role === 'student' && m.type === 'worksheet' && (
-                          <button onClick={() => submitWorksheet(m.id)} disabled={submissions.has(m.id)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${submissions.has(m.id) ? 'bg-success-50 text-success-700' : 'bg-primary-50 text-primary-700 hover:bg-primary-100'}`}>
-                            {submissions.has(m.id) ? '✓ Done' : 'Complete Task'}
+                          <button onClick={() => setWorksheet(m)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                            submissions[m.id]?.status === 'graded' ? 'bg-success-50 text-success-700' :
+                            submissions[m.id]?.status === 'submitted' ? 'bg-primary-50 text-primary-700' :
+                            submissions[m.id]?.status === 'in_progress' ? 'bg-warning-50 text-warning-700' :
+                            'bg-primary-50 text-primary-700 hover:bg-primary-100'
+                          }`}>
+                            <PenLine size={12} />
+                            {submissions[m.id]?.status === 'graded' ? `Graded: ${submissions[m.id]?.score ?? '—'}` :
+                             submissions[m.id]?.status === 'submitted' ? 'Submitted — View' :
+                             submissions[m.id]?.status === 'in_progress' ? 'Continue Draft' : 'Complete Worksheet'}
                           </button>
                         )}
                       </div>
@@ -204,6 +209,14 @@ export default function LecturesPage() {
         <LectureForm course={selectedCourse} lecture={editing} onClose={() => setShowForm(false)} onSaved={() => { setShowForm(false); loadLectures(selectedCourse); }} />
       )}
       {watching && <WatchModal lecture={watching} course={selectedCourse} onClose={() => setWatching(null)} />}
+      {worksheet && (
+        <WorksheetModal
+          material={worksheet}
+          submission={submissions[worksheet.id]}
+          onClose={() => setWorksheet(null)}
+          onSaved={(sub) => { setSubmissions((s) => ({ ...s, [worksheet.id]: sub })); }}
+        />
+      )}
     </div>
   );
 }
@@ -322,45 +335,86 @@ function UploadButton({ lecture, onDone }: { lecture: Lecture; onDone: () => voi
   );
 }
 
-function WatchModal({ lecture, course, onClose }: { lecture: Lecture; course: Course; onClose: () => void }) {
+const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
+function WatchModal({ lecture, course, onClose }: { lecture: Lecture & { materials?: CourseMaterial[] }; course: Course; onClose: () => void }) {
   const { profile } = useAuth();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const playerWrapRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState(0);
   const [progress, setProgress] = useState<any>(null);
   const [playing, setPlaying] = useState(false);
   const [totalWatch, setTotalWatch] = useState(0);
   const [lastSave, setLastSave] = useState(0);
   const [activityId, setActivityId] = useState<string | null>(null);
+  const [rate, setRate] = useState(1);
+  const [showRateMenu, setShowRateMenu] = useState(false);
+  const [captionsOn, setCaptionsOn] = useState(false);
+  const [markedComplete, setMarkedComplete] = useState(false);
+  const [myRating, setMyRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [initialSeekDone, setInitialSeekDone] = useState(false);
+
+  const videoMaterial = (lecture.materials || []).find((m) => m.type === 'video');
+  const captionMaterial = (lecture.materials || []).find((m) => m.type === 'reference' as any && m.url?.toLowerCase().endsWith('.vtt'));
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
-        .from('lecture_activity')
-        .select('*')
-        .eq('user_id', profile!.id)
-        .eq('lecture_id', lecture.id)
-        .maybeSingle();
+      const [{ data }, { data: ratingRow }] = await Promise.all([
+        supabase.from('lecture_activity').select('*').eq('user_id', profile!.id).eq('lecture_id', lecture.id).maybeSingle(),
+        supabase.from('lecture_ratings').select('rating').eq('student_id', profile!.id).eq('lecture_id', lecture.id).maybeSingle(),
+      ]);
       if (data) {
         setProgress(data);
         setPosition(data.last_position || 0);
         setTotalWatch(data.total_watch_seconds || 0);
+        setMarkedComplete(!!data.completed_at);
+        setActivityId(data.id);
       } else {
         const { data: actData } = await startLectureActivity(lecture.id);
         if (actData?.[0]?.id) setActivityId(actData[0].id);
       }
+      if (ratingRow) setMyRating(ratingRow.rating);
     })();
   }, [lecture.id]);
 
+  // Seek the real <video> element to the saved position once metadata is ready
   useEffect(() => {
-    if (!playing) return;
+    if (!videoMaterial || !videoRef.current || initialSeekDone) return;
+    const v = videoRef.current;
+    const onLoaded = () => {
+      if (position > 0) v.currentTime = position;
+      setInitialSeekDone(true);
+    };
+    v.addEventListener('loadedmetadata', onLoaded);
+    return () => v.removeEventListener('loadedmetadata', onLoaded);
+  }, [videoMaterial, position, initialSeekDone]);
+
+  // Fallback simulated playback when no real video file is attached
+  useEffect(() => {
+    if (videoMaterial || !playing) return;
     const interval = setInterval(() => {
-      setPosition((p) => {
-        const np = p + 1;
-        setTotalWatch((w) => w + 1);
-        return np;
-      });
+      setPosition((p) => { setTotalWatch((w) => w + 1); return p + 1; });
     }, 1000);
     return () => clearInterval(interval);
-  }, [playing]);
+  }, [playing, videoMaterial]);
+
+  const persist = (pos: number, watch: number) => {
+    if (!activityId) return;
+    const dur = lecture.duration_seconds || videoRef.current?.duration || 1;
+    const pct = Math.min(100, (pos / dur) * 100);
+    const completed = pct >= 95;
+    updateLectureActivity(activityId, {
+      last_position: pos,
+      total_watch_seconds: watch,
+      completion_percentage: pct,
+      completed_at: completed ? new Date().toISOString() : null,
+    });
+    if (completed && !markedComplete) {
+      setMarkedComplete(true);
+      supabase.from('watch_events').insert({ student_id: profile!.id, lecture_id: lecture.id, event_type: 'complete', position_seconds: pos });
+    }
+  };
 
   useEffect(() => {
     if (!activityId) return;
@@ -368,29 +422,45 @@ function WatchModal({ lecture, course, onClose }: { lecture: Lecture; course: Co
     const now = Date.now();
     if (now - lastSave < 5000) return;
     setLastSave(now);
-    const dur = lecture.duration_seconds || 1;
-    const pct = Math.min(100, (position / dur) * 100);
-    const completed = pct >= 95;
-    updateLectureActivity(activityId, {
-      last_position: position,
-      total_watch_seconds: totalWatch,
-      completion_percentage: pct,
-      completed_at: completed ? new Date().toISOString() : null,
-    });
-    if (completed && !(progress?.completed_at)) {
-      supabase.from('watch_events').insert({ student_id: profile!.id, lecture_id: lecture.id, event_type: 'complete', position_seconds: position });
-    }
+    persist(position, totalWatch);
   }, [position, activityId]);
 
   const togglePlay = () => {
+    if (videoMaterial && videoRef.current) {
+      if (videoRef.current.paused) videoRef.current.play(); else videoRef.current.pause();
+      return;
+    }
     setPlaying((p) => {
       const np = !p;
-      supabase.from('watch_events').insert({
-        student_id: profile!.id, lecture_id: lecture.id,
-        event_type: np ? 'resume' : 'pause', position_seconds: position,
-      });
+      supabase.from('watch_events').insert({ student_id: profile!.id, lecture_id: lecture.id, event_type: np ? 'resume' : 'pause', position_seconds: position });
       return np;
     });
+  };
+
+  const changeRate = (r: number) => {
+    setRate(r);
+    if (videoRef.current) videoRef.current.playbackRate = r;
+    setShowRateMenu(false);
+  };
+
+  const goFullscreen = () => {
+    const el = videoMaterial ? videoRef.current : playerWrapRef.current;
+    if (el?.requestFullscreen) el.requestFullscreen();
+  };
+
+  const markComplete = async () => {
+    const dur = lecture.duration_seconds || videoRef.current?.duration || 1;
+    setMarkedComplete(true);
+    setPosition(dur);
+    if (activityId) {
+      await updateLectureActivity(activityId, { completion_percentage: 100, completed_at: new Date().toISOString(), last_position: dur });
+    }
+    await supabase.from('watch_events').insert({ student_id: profile!.id, lecture_id: lecture.id, event_type: 'complete', position_seconds: dur });
+  };
+
+  const rate5 = async (r: number) => {
+    setMyRating(r);
+    await supabase.from('lecture_ratings').upsert({ student_id: profile!.id, lecture_id: lecture.id, rating: r }, { onConflict: 'student_id,lecture_id' });
   };
 
   const dur = lecture.duration_seconds || 1;
@@ -399,35 +469,209 @@ function WatchModal({ lecture, course, onClose }: { lecture: Lecture; course: Co
   return (
     <Modal open onClose={onClose} title={lecture.title} maxW="max-w-3xl">
       <div className="p-6 pt-2 space-y-5">
-        <div className="aspect-video bg-slate-900 rounded-2xl flex items-center justify-center relative overflow-hidden shadow-inner group">
-          <div className="text-center text-white relative z-10 transition-transform group-hover:scale-105 duration-500">
-            <button onClick={togglePlay} className="w-20 h-20 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md flex items-center justify-center mx-auto mb-4 transition-all hover:scale-110 shadow-lg ring-1 ring-white/20">
-              {playing ? <div className="w-6 h-6 border-l-4 border-r-4 border-white" /> : <Play size={36} className="ml-2 fill-white text-white drop-shadow-md" />}
+        {videoMaterial ? (
+          <div ref={playerWrapRef} className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-inner group">
+            <video
+              ref={videoRef}
+              src={videoMaterial.url}
+              className="w-full aspect-video bg-black"
+              controls
+              onPlay={() => setPlaying(true)}
+              onPause={() => setPlaying(false)}
+              onTimeUpdate={(e) => {
+                const t = e.currentTarget.currentTime;
+                setPosition(t);
+                setTotalWatch((w) => w + (playing ? 1 / 30 : 0));
+              }}
+              onEnded={markComplete}
+            >
+              {captionMaterial && <track kind="captions" src={captionMaterial.url} default={captionsOn} />}
+            </video>
+            <div className="absolute top-3 right-3 flex items-center gap-2 z-10">
+              <div className="relative">
+                <button onClick={() => setShowRateMenu((s) => !s)} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-black/50 text-white text-xs font-bold backdrop-blur-sm hover:bg-black/70 transition-colors">
+                  <Gauge size={13} /> {rate}x
+                </button>
+                {showRateMenu && (
+                  <div className="absolute right-0 mt-1 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden py-1 w-20 z-20">
+                    {PLAYBACK_RATES.map((r) => (
+                      <button key={r} onClick={() => changeRate(r)} className={`w-full text-left px-3 py-1.5 text-xs font-bold hover:bg-slate-50 ${r === rate ? 'text-primary-600' : 'text-slate-600'}`}>{r}x</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => setCaptionsOn((c) => !c)}
+                disabled={!captionMaterial}
+                title={captionMaterial ? 'Toggle captions' : 'No captions available for this lecture'}
+                className={`p-1.5 rounded-lg backdrop-blur-sm transition-colors ${captionsOn ? 'bg-primary-500 text-white' : 'bg-black/50 text-white hover:bg-black/70'} disabled:opacity-40 disabled:cursor-not-allowed`}
+              >
+                <Captions size={15} />
+              </button>
+              <button onClick={goFullscreen} className="p-1.5 rounded-lg bg-black/50 text-white backdrop-blur-sm hover:bg-black/70 transition-colors">
+                <Maximize size={15} />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="aspect-video bg-slate-900 rounded-2xl flex items-center justify-center relative overflow-hidden shadow-inner group">
+            <div className="text-center text-white relative z-10 transition-transform group-hover:scale-105 duration-500">
+              <button onClick={togglePlay} className="w-20 h-20 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md flex items-center justify-center mx-auto mb-4 transition-all hover:scale-110 shadow-lg ring-1 ring-white/20">
+                {playing ? <div className="w-6 h-6 border-l-4 border-r-4 border-white" /> : <Play size={36} className="ml-2 fill-white text-white drop-shadow-md" />}
+              </button>
+              <p className="text-sm font-bold text-white tracking-wide">No video file attached</p>
+              <p className="text-xs font-semibold text-white/50 mt-1 uppercase tracking-widest">{course.title}</p>
+            </div>
+            <div className="absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col gap-3">
+              <div className="w-full bg-white/20 rounded-full h-1.5 overflow-hidden backdrop-blur-sm relative">
+                <div className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-sky-400 to-blue-500 rounded-full" style={{ width: `${pct}%` }} />
+              </div>
+              <div className="flex items-center justify-between text-xs font-bold text-white">
+                <span>{formatDuration(position)} <span className="text-white/40">/ {formatDuration(lecture.duration_seconds)}</span></span>
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <button onClick={() => setShowRateMenu((s) => !s)} className="flex items-center gap-1 bg-black/40 px-2 py-1 rounded backdrop-blur-sm border border-white/10">
+                      <Gauge size={11} /> {rate}x
+                    </button>
+                    {showRateMenu && (
+                      <div className="absolute right-0 bottom-7 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden py-1 w-16 z-20">
+                        {PLAYBACK_RATES.map((r) => (
+                          <button key={r} onClick={() => changeRate(r)} className={`w-full text-left px-3 py-1.5 text-xs font-bold hover:bg-slate-50 ${r === rate ? 'text-primary-600' : 'text-slate-600'}`}>{r}x</button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <button onClick={goFullscreen} className="bg-black/40 p-1 rounded backdrop-blur-sm border border-white/10"><Maximize size={13} /></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge color={markedComplete || pct >= 95 ? 'success' : 'primary'} className="text-sm px-3 py-1">{markedComplete ? 'Completed' : `${Math.round(pct)}% Watched`}</Badge>
+            <Badge color="slate" className="text-sm px-3 py-1">{Math.round(totalWatch / 60)}m Total Watched</Badge>
+          </div>
+          {!markedComplete && (
+            <Button size="sm" variant="secondary" onClick={markComplete}><CheckCircle2 size={14} /> Mark as Completed</Button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-2">Rate this lecture</span>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button key={n} onMouseEnter={() => setHoverRating(n)} onMouseLeave={() => setHoverRating(0)} onClick={() => rate5(n)} aria-label={`Rate ${n} star`}>
+              <Star size={18} className={(hoverRating || myRating) >= n ? 'fill-amber-400 text-amber-400' : 'text-slate-300'} />
             </button>
-            <p className="text-sm font-bold text-white tracking-wide">Interactive Video Player</p>
-            <p className="text-xs font-semibold text-white/50 mt-1 uppercase tracking-widest">{course.title}</p>
-          </div>
-          <div className="absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col gap-3">
-            <div className="w-full bg-white/20 rounded-full h-1.5 overflow-hidden backdrop-blur-sm relative">
-              <div className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-sky-400 to-blue-500 rounded-full" style={{ width: `${pct}%` }} />
-            </div>
-            <div className="flex items-center justify-between text-xs font-bold text-white">
-              <span>{formatDuration(position)} <span className="text-white/40">/ {formatDuration(lecture.duration_seconds)}</span></span>
-              <span className="bg-black/40 px-2 py-1 rounded backdrop-blur-sm border border-white/10">{playing ? 'PAUSED' : 'PLAYING'}</span>
-            </div>
-          </div>
+          ))}
+          {myRating > 0 && <span className="text-xs font-bold text-slate-400 ml-2">You rated {myRating}/5</span>}
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge color={pct >= 95 ? 'success' : 'primary'} className="text-sm px-3 py-1">{Math.round(pct)}% Completed</Badge>
-          <Badge color="slate" className="text-sm px-3 py-1">{Math.round(totalWatch / 60)}m Total Watched</Badge>
-        </div>
+
         {lecture.description && (
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
             <p className="text-sm text-slate-700 leading-relaxed">{lecture.description}</p>
           </div>
         )}
         <div className="flex justify-end pt-2">
-          <Button variant="secondary" onClick={onClose}>Close Player</Button>
+          <Button variant="secondary" onClick={() => { persist(position, totalWatch); onClose(); }}>Close Player</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ─── Worksheet: online completion, save draft, submit, view history ───────────
+function WorksheetModal({ material, submission, onClose, onSaved }: {
+  material: CourseMaterial; submission?: WorksheetSubmission; onClose: () => void; onSaved: (s: WorksheetSubmission) => void;
+}) {
+  const { profile } = useAuth();
+  const [answer, setAnswer] = useState(submission?.answer_text || '');
+  const [saving, setSaving] = useState<'draft' | 'submit' | null>(null);
+  const [error, setError] = useState('');
+  const isGraded = submission?.status === 'graded';
+  const isSubmitted = submission?.status === 'submitted';
+  const readOnly = isGraded || isSubmitted;
+
+  const save = async (finalStatus: 'in_progress' | 'submitted') => {
+    setSaving(finalStatus === 'submitted' ? 'submit' : 'draft');
+    setError('');
+    try {
+      const payload = {
+        student_id: profile!.id,
+        material_id: material.id,
+        status: finalStatus,
+        answer_text: answer,
+        submitted_at: new Date().toISOString(),
+      };
+      const { data, error: err } = await supabase
+        .from('worksheet_submissions')
+        .upsert(payload, { onConflict: 'student_id,material_id' })
+        .select()
+        .single();
+      if (err) throw err;
+      onSaved(data as WorksheetSubmission);
+      if (finalStatus === 'submitted') onClose();
+    } catch (err: any) {
+      setError(err.message || 'Failed to save worksheet.');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title={material.title} maxW="max-w-2xl">
+      <div className="p-6 pt-2 space-y-5">
+        <div className="flex items-center justify-between">
+          <Badge color={isGraded ? 'success' : isSubmitted ? 'primary' : submission ? 'warning' : 'slate'}>
+            {isGraded ? 'Graded' : isSubmitted ? 'Submitted' : submission ? 'Draft Saved' : 'Not Started'}
+          </Badge>
+          <a href={material.url} target="_blank" rel="noreferrer" className="text-xs font-bold text-primary-600 hover:underline flex items-center gap-1">
+            <Download size={12} /> Download Worksheet
+          </a>
+        </div>
+
+        {error && <div className="text-sm font-semibold text-danger-700 bg-danger-50 border border-danger-200 rounded-xl px-4 py-3">{error}</div>}
+
+        {isGraded && (
+          <div className="flex items-center justify-between px-4 py-3 rounded-xl border-2 border-emerald-100 bg-emerald-50 text-emerald-700 font-bold text-sm">
+            <span>Score</span><span>{submission?.score ?? '—'}</span>
+          </div>
+        )}
+        {isGraded && submission?.feedback && (
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Feedback</p>
+            <p className="text-sm text-slate-600 whitespace-pre-wrap">{submission.feedback}</p>
+          </div>
+        )}
+
+        <div>
+          <label className="label">Your Answer</label>
+          <Textarea
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+            rows={10}
+            placeholder="Complete the worksheet here — your progress is saved as a draft until you submit..."
+            disabled={readOnly}
+          />
+        </div>
+
+        {submission?.updated_at && (
+          <p className="text-[11px] text-slate-400 font-medium">Last saved {formatDuration(Math.max(0, Math.floor((Date.now() - new Date(submission.updated_at).getTime()) / 1000)))} ago</p>
+        )}
+
+        <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+          <Button variant="ghost" onClick={onClose}>{readOnly ? 'Close' : 'Cancel'}</Button>
+          {!readOnly && (
+            <>
+              <Button variant="secondary" disabled={saving !== null} onClick={() => save('in_progress')}>
+                <Save size={14} /> {saving === 'draft' ? 'Saving...' : 'Save Draft'}
+              </Button>
+              <Button variant="gradient" disabled={saving !== null || !answer.trim()} onClick={() => save('submitted')}>
+                {saving === 'submit' ? 'Submitting...' : 'Submit Worksheet'}
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </Modal>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
-  Award, GraduationCap, Calendar, Clock, ExternalLink, Download,
-  Star, BookOpen, CheckCircle, Search
+  Award, GraduationCap, Calendar, ExternalLink, Download,
+  Star, BookOpen, Search
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
@@ -27,6 +27,42 @@ function gradeLabel(score: number) {
   if (score >= 75) return { label: 'Merit', color: 'text-primary-600', bg: 'bg-primary-50 border-primary-200' };
   if (score >= 60) return { label: 'Pass', color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200' };
   return { label: 'Completion', color: 'text-slate-600', bg: 'bg-slate-50 border-slate-200' };
+}
+
+function downloadCertificate(cert: CertRecord, studentName: string) {
+  const win = window.open('', '_blank', 'width=900,height=650');
+  if (!win) return;
+  const completedDate = new Date(cert.completedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  win.document.write(`<!doctype html><html><head><title>${cert.certId}</title><style>
+    @page { size: landscape; margin: 0; }
+    body { margin: 0; font-family: Georgia, 'Times New Roman', serif; background: #fdf6e3; display: flex; align-items: center; justify-content: center; height: 100vh; }
+    .cert { width: 90%; max-width: 900px; border: 10px solid #f59e0b; border-radius: 16px; padding: 60px 50px; text-align: center; background: linear-gradient(135deg,#fffbeb,#fef3c7); }
+    .kicker { letter-spacing: 6px; text-transform: uppercase; font-size: 12px; font-weight: bold; color: #b45309; }
+    .sub { color: #64748b; margin: 18px 0 4px; font-size: 14px; }
+    .name { font-size: 34px; font-weight: bold; color: #1e293b; margin: 6px 0 16px; }
+    .course { font-size: 22px; font-weight: bold; color: #4338ca; margin: 10px 0 24px; }
+    .meta { display: flex; justify-content: center; gap: 40px; margin-top: 28px; }
+    .meta div { text-align: center; }
+    .meta p.label { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #94a3b8; margin: 0 0 4px; }
+    .meta p.value { font-size: 16px; font-weight: bold; color: #1e293b; margin: 0; }
+    .certid { margin-top: 30px; font-size: 11px; letter-spacing: 2px; color: #94a3b8; }
+  </style></head><body>
+    <div class="cert">
+      <p class="kicker">Certificate of Completion</p>
+      <p class="sub">This is to certify that</p>
+      <p class="name">${studentName}</p>
+      <p class="sub">has successfully completed</p>
+      <p class="course">${cert.course}</p>
+      <div class="meta">
+        <div><p class="label">Grade</p><p class="value">${cert.grade}%</p></div>
+        <div><p class="label">Completed</p><p class="value">${completedDate}</p></div>
+        <div><p class="label">Instructor</p><p class="value">${cert.instructor}</p></div>
+      </div>
+      <p class="certid">${cert.certId}</p>
+    </div>
+    <script>window.onload = () => { window.print(); }</script>
+  </body></html>`);
+  win.document.close();
 }
 
 export default function CertificatePage() {
@@ -210,7 +246,7 @@ export default function CertificatePage() {
                         <ExternalLink size={12} /> View
                       </button>
                       <button
-                        onClick={e => e.stopPropagation()}
+                        onClick={e => { e.stopPropagation(); downloadCertificate(cert, profile!.full_name || profile!.email); }}
                         className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
                       >
                         <Download size={12} /> Download
@@ -276,7 +312,10 @@ export default function CertificatePage() {
               <button onClick={() => setPreviewCert(null)} className="flex-1 py-3 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold transition-colors">
                 Close
               </button>
-              <button className="flex-1 py-3 bg-amber-500 text-white rounded-xl font-bold hover:bg-amber-600 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25">
+              <button
+                onClick={() => downloadCertificate(previewCert, profile.full_name || profile.email)}
+                className="flex-1 py-3 bg-amber-500 text-white rounded-xl font-bold hover:bg-amber-600 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25"
+              >
                 <Download size={18} /> Download PDF
               </button>
             </div>
