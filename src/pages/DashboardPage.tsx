@@ -99,21 +99,23 @@ async function loadAdmin(setData: (d: any) => void) {
 }
 
 async function loadProfessor(setData: (d: any) => void, profId: string) {
-  const [courses, lectures, enrollments, attempts, alerts, materials] = await Promise.all([
+  const myCourseIds = ((await supabase.from('courses').select('id').eq('professor_id', profId)).data || []).map((c) => c.id);
+  const noRows = ['00000000-0000-0000-0000-000000000000'];
+
+  const [courses, lectures, enrollments, attempts, alerts, materials, assignments, exams] = await Promise.all([
     supabase.from('courses').select('id, title, status').eq('professor_id', profId),
-    supabase.from('lectures').select('id, course_id, created_at').in('course_id',
-      ((await supabase.from('courses').select('id').eq('professor_id', profId)).data || []).map((c) => c.id)
-    ),
+    supabase.from('lectures').select('id, title, course_id, created_at, course:courses(title)').in('course_id', myCourseIds.length ? myCourseIds : noRows).order('created_at', { ascending: false }).limit(5),
     supabase.from('enrollments').select('id, course_id, student_id, progress_pct, status'),
     supabase.from('exam_attempts').select('id, score, total_marks'),
     supabase.from('alerts').select('id, severity, title, message, created_at, read_at').eq('user_id', profId).order('created_at', { ascending: false }).limit(6),
     supabase.from('course_materials').select('id, type, created_at'),
+    supabase.from('assignments').select('id, title, due_date').eq('professor_id', profId),
+    supabase.from('exams').select('id, title, type, duration_minutes, publish_date, course:courses(title)').in('course_id', myCourseIds.length ? myCourseIds : noRows).eq('status', 'published').order('publish_date', { ascending: true }).limit(5),
   ]);
 
   const courseList = courses.data || [];
   const lectureList = lectures.data || [];
   const enrList = enrollments.data || [];
-  const myCourseIds = courseList.map((c) => c.id);
   const myEnrollments = enrList.filter((e) => myCourseIds.includes(e.course_id));
   const avgProgress = myEnrollments.length ? myEnrollments.reduce((s, e) => s + (e.progress_pct || 0), 0) / myEnrollments.length : 0;
 
@@ -122,6 +124,17 @@ async function loadProfessor(setData: (d: any) => void, profId: string) {
 
   const matsByType: Record<string, number> = {};
   (materials.data || []).forEach((m) => { matsByType[m.type] = (matsByType[m.type] || 0) + 1; });
+
+  const myAssignmentIds = (assignments.data || []).map((a) => a.id);
+  let pendingCount = 0;
+  if (myAssignmentIds.length) {
+    const { count } = await supabase
+      .from('assignment_submissions')
+      .select('id', { count: 'exact', head: true })
+      .in('assignment_id', myAssignmentIds)
+      .in('status', ['submitted', 'late']);
+    pendingCount = count || 0;
+  }
 
   setData({
     courses: courseList.length,
@@ -137,7 +150,10 @@ async function loadProfessor(setData: (d: any) => void, profId: string) {
       pending: courseList.filter((c) => c.status === 'pending').length,
       draft: courseList.filter((c) => c.status === 'draft').length,
     },
-    weeklyActivity: [12, 19, 3, 5, 2, 3, 7]
+    weeklyActivity: [12, 19, 3, 5, 2, 3, 7],
+    recentLectures: lectureList.map((l: any) => ({ id: l.id, title: l.title, courseTitle: l.course?.title, createdAt: l.created_at })),
+    pendingAssignments: pendingCount,
+    upcomingExams: (exams.data || []) as any[],
   });
 }
 
@@ -272,9 +288,9 @@ function ProfessorDashboard({ data }: { data: any }) {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
         <StatCard label="My Courses" value={data.courses} icon={<BookOpen size={20} />} color="sky" />
-        <StatCard label="Lectures" value={data.lectures} icon={<Clock size={20} />} color="emerald" />
-        <StatCard label="Students" value={data.students} icon={<Users size={20} />} color="violet" trend="up" trendLabel="+8%" />
-        <StatCard label="Avg Score" value={`${data.avgScore}%`} icon={<Award size={20} />} color="amber" />
+        <StatCard label="Total Students" value={data.students} icon={<Users size={20} />} color="violet" trend="up" trendLabel="+8%" />
+        <StatCard label="Recent Lectures" value={data.lectures} icon={<Clock size={20} />} color="emerald" />
+        <StatCard label="Pending Assignments" value={data.pendingAssignments || 0} icon={<CheckCircle2 size={20} />} color="amber" />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-6">
         <ChartCard title="Materials Distribution">
@@ -282,14 +298,46 @@ function ProfessorDashboard({ data }: { data: any }) {
             <BarChart data={data.materialsByType || []} color="#0ea5e9" />
           </div>
         </ChartCard>
-        <ChartCard title="Average Student Progress">
+        <ChartCard title="Student Progress">
           <div className="flex flex-col justify-center h-full gap-5 py-6">
             <div className="flex items-end gap-2">
               <span className="text-5xl font-black text-slate-800 tracking-tighter">{data.avgProgress}</span>
               <span className="text-2xl font-bold text-slate-400 mb-1">%</span>
             </div>
             <ProgressBar value={data.avgProgress} size="lg" color="primary" />
-            <p className="text-sm text-slate-500 font-medium">Across all your active courses</p>
+            <p className="text-sm text-slate-500 font-medium">Average across all your active courses</p>
+          </div>
+        </ChartCard>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <ChartCard title="Recent Lectures">
+          <div className="space-y-2.5 pt-2">
+            {(data.recentLectures || []).map((l: any) => (
+              <div key={l.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:bg-slate-50 transition-colors">
+                <span className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0"><Clock size={16} /></span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-slate-700 truncate">{l.title}</p>
+                  <p className="text-xs text-slate-500 truncate">{l.courseTitle}</p>
+                </div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase shrink-0">{new Date(l.createdAt).toLocaleDateString()}</span>
+              </div>
+            ))}
+            {(data.recentLectures || []).length === 0 && <p className="text-sm font-medium text-slate-400 text-center py-6">No lectures created yet</p>}
+          </div>
+        </ChartCard>
+        <ChartCard title="Upcoming Quizzes & Exams">
+          <div className="space-y-2.5 pt-2">
+            {(data.upcomingExams || []).map((e: any) => (
+              <div key={e.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:bg-slate-50 transition-colors">
+                <span className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${e.type === 'quiz' ? 'bg-violet-100 text-violet-600' : 'bg-blue-100 text-blue-600'}`}><Target size={16} /></span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-slate-700 truncate">{e.title}</p>
+                  <p className="text-xs text-slate-500 truncate">{e.course?.title} &middot; {e.duration_minutes}m</p>
+                </div>
+                <Badge color={e.type === 'quiz' ? 'purple' : 'blue'}>{e.type}</Badge>
+              </div>
+            ))}
+            {(data.upcomingExams || []).length === 0 && <p className="text-sm font-medium text-slate-400 text-center py-6">No upcoming assessments scheduled</p>}
           </div>
         </ChartCard>
       </div>

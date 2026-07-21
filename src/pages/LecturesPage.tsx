@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   FileText, Plus, Play, Bookmark, Download, Upload, Trash2, ArrowLeft, Clock,
-  CheckCircle2, Star, Maximize, Gauge, Captions, Save, PenLine,
+  CheckCircle2, Star, Maximize, Gauge, Captions, Save, PenLine, AlertTriangle, Users,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { supabase, Lecture, CourseMaterial, Course, WorksheetSubmission, startLectureActivity, updateLectureActivity } from '../lib/supabase';
-import { Button, Card, Input, Textarea, Select, Badge, Spinner, EmptyState, Modal, ProgressBar, formatDuration, formatDate } from '../components/ui';
+import { Button, Card, Input, Textarea, Select, Badge, Spinner, EmptyState, Modal, ProgressBar, formatDuration, formatDate, formatDateTime } from '../components/ui';
 
-export default function LecturesPage() {
+export default function LecturesPage({ onNavigate }: { onNavigate?: (id: string) => void }) {
   const { profile } = useAuth();
   const role = profile?.role ?? 'student';
   const [courses, setCourses] = useState<Course[]>([]);
@@ -20,6 +20,7 @@ export default function LecturesPage() {
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set());
   const [submissions, setSubmissions] = useState<Record<string, WorksheetSubmission>>({});
   const [worksheet, setWorksheet] = useState<CourseMaterial | null>(null);
+  const [gradingWorksheet, setGradingWorksheet] = useState<CourseMaterial | null>(null);
 
   const loadCourses = async () => {
     let q = supabase.from('courses').select('*').order('created_at', { ascending: false });
@@ -84,7 +85,12 @@ export default function LecturesPage() {
         </div>
         {courses.length === 0 ? (
           <Card className="py-4">
-            <EmptyState icon={<FileText size={32} />} title="No courses available" description={role === 'student' ? 'Enroll in a course first' : 'Create a course first'} />
+            <EmptyState
+              icon={<FileText size={32} />}
+              title="No courses available"
+              description={role === 'student' ? 'Enroll in a course first' : 'Lectures belong to a course — create one first, then come back here to add lectures.'}
+              action={role === 'professor' && onNavigate ? <Button variant="gradient" onClick={() => onNavigate('courses')}><Plus size={16} /> Create a Course</Button> : undefined}
+            />
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -176,6 +182,11 @@ export default function LecturesPage() {
                              submissions[m.id]?.status === 'in_progress' ? 'Continue Draft' : 'Complete Worksheet'}
                           </button>
                         )}
+                        {role === 'professor' && m.type === 'worksheet' && (
+                          <button onClick={() => setGradingWorksheet(m)} className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 bg-amber-50 text-amber-700 hover:bg-amber-100">
+                            <PenLine size={12} /> Submissions
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -215,6 +226,12 @@ export default function LecturesPage() {
           submission={submissions[worksheet.id]}
           onClose={() => setWorksheet(null)}
           onSaved={(sub) => { setSubmissions((s) => ({ ...s, [worksheet.id]: sub })); }}
+        />
+      )}
+      {gradingWorksheet && (
+        <WorksheetSubmissionsModal
+          material={gradingWorksheet}
+          onClose={() => setGradingWorksheet(null)}
         />
       )}
     </div>
@@ -674,6 +691,124 @@ function WorksheetModal({ material, submission, onClose, onSaved }: {
           )}
         </div>
       </div>
+    </Modal>
+  );
+}
+
+// ─── Worksheet Submissions (professor grading view) ────────────────────────────
+function WorksheetSubmissionsModal({ material, onClose }: { material: CourseMaterial; onClose: () => void }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [rows, setRows] = useState<(WorksheetSubmission & { student?: { full_name: string; email: string } })[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, { score: string; feedback: string }>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data, error: err } = await supabase
+        .from('worksheet_submissions')
+        .select('*, student:profiles(full_name, email)')
+        .eq('material_id', material.id)
+        .in('status', ['submitted', 'graded'])
+        .order('submitted_at', { ascending: false });
+      if (err) throw err;
+      setRows((data || []) as any);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load submissions.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, [material.id]);
+
+  const saveGrade = async (s: WorksheetSubmission) => {
+    const draft = drafts[s.id];
+    const scoreStr = draft?.score ?? String(s.score ?? '');
+    const feedback = draft?.feedback ?? s.feedback ?? '';
+    const score = parseFloat(scoreStr);
+    if (isNaN(score) || score < 0) { setError('Enter a valid score before saving.'); return; }
+
+    setError('');
+    setSaving(s.id);
+    try {
+      const { error: updErr } = await supabase
+        .from('worksheet_submissions')
+        .update({ score, feedback, status: 'graded' })
+        .eq('id', s.id);
+      if (updErr) throw updErr;
+      await load();
+    } catch (err: any) {
+      setError(err.message || 'Failed to save grade.');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title={`Submissions — ${material.title}`} maxW="max-w-4xl">
+      {loading ? (
+        <div className="p-12 flex justify-center"><Spinner /></div>
+      ) : (
+        <div className="flex flex-col max-h-[75vh] p-6 pt-2">
+          {error && (
+            <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-danger-700 bg-danger-50 border border-danger-200 rounded-xl px-4 py-3">
+              <AlertTriangle size={16} className="shrink-0" /> {error}
+            </div>
+          )}
+          {rows.length === 0 ? (
+            <EmptyState icon={<Users size={32} className="text-primary-400" />} title="No submissions yet" description="No students have submitted this worksheet." />
+          ) : (
+            <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+              {rows.map((s) => {
+                const draft = drafts[s.id];
+                return (
+                  <div key={s.id} className="bg-slate-50 rounded-2xl border border-slate-200 p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                      <div>
+                        <p className="font-bold text-slate-800">{s.student?.full_name || s.student?.email || 'Student'}</p>
+                        <p className="text-xs text-slate-400">Submitted {formatDateTime(s.submitted_at)}</p>
+                      </div>
+                      <Badge color={s.status === 'graded' ? 'success' : 'slate'}>{s.status}</Badge>
+                    </div>
+                    <div className="bg-white rounded-xl border border-slate-100 p-4 mb-3 max-h-40 overflow-y-auto">
+                      <p className="text-sm text-slate-600 whitespace-pre-wrap">{s.answer_text || <span className="italic text-slate-400">No answer provided</span>}</p>
+                    </div>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div>
+                        <label className="label text-xs">Score</label>
+                        <Input
+                          type="number"
+                          min={0}
+                          defaultValue={s.score ?? ''}
+                          onChange={(e) => setDrafts((d) => ({ ...d, [s.id]: { score: e.target.value, feedback: d[s.id]?.feedback ?? s.feedback ?? '' } }))}
+                          className="w-28"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-[200px]">
+                        <label className="label text-xs">Feedback</label>
+                        <Input
+                          defaultValue={s.feedback ?? ''}
+                          onChange={(e) => setDrafts((d) => ({ ...d, [s.id]: { score: d[s.id]?.score ?? String(s.score ?? ''), feedback: e.target.value } }))}
+                          placeholder="Feedback for the student..."
+                        />
+                      </div>
+                      <Button size="sm" variant="gradient" disabled={saving === s.id} onClick={() => saveGrade(s)}>
+                        {saving === s.id ? 'Saving...' : draft || s.status === 'graded' ? 'Update Grade' : 'Save Grade'}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="flex justify-end pt-6 mt-4 border-t border-slate-100">
+            <Button variant="secondary" onClick={onClose} size="lg">Close</Button>
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }

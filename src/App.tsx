@@ -69,8 +69,8 @@ function AppInner() {
     switch (active) {
       case 'dashboard': return <DashboardPage onNavigate={setActive} />;
       case 'courses': return <CoursesPage />;
-      case 'lectures': return role === 'student' || role === 'professor' ? <LecturesPage /> : <DashboardPage />;
-      case 'assignments': return role === 'student' || role === 'professor' ? <AssignmentsPage /> : <DashboardPage />;
+      case 'lectures': return role === 'student' || role === 'professor' ? <LecturesPage onNavigate={setActive} /> : <DashboardPage />;
+      case 'assignments': return role === 'student' || role === 'professor' ? <AssignmentsPage onNavigate={setActive} /> : <DashboardPage />;
       case 'users': return role === 'admin' ? <UsersPage /> : <DashboardPage />;
       case 'questionbank': return role === 'admin' || role === 'professor' ? <QuestionBankPage /> : <DashboardPage />;
       case 'exams': return <ExamsPage />;
@@ -83,7 +83,7 @@ function AppInner() {
       case 'finance': return role === 'admin' || role === 'student' ? <FinancePage /> : <DashboardPage />;
       case 'profile': return <ProfilePage />;
       case 'certificates': return role === 'student' ? <CertificatePage /> : <DashboardPage />;
-      case 'attendance': return role === 'student' ? <AttendancePage /> : <DashboardPage />;
+      case 'attendance': return role === 'student' || role === 'professor' ? <AttendancePage /> : <DashboardPage />;
       case 'bookmarks': return role === 'student' ? <BookmarksPage /> : <DashboardPage />;
       case 'library': return role === 'student' ? <LibraryPage /> : <DashboardPage />;
       case 'settings': return role === 'admin' ? <SettingsPage /> : <DashboardPage />;

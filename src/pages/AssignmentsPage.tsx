@@ -21,7 +21,7 @@ function dueBadge(dueDate: string | null, submitted: boolean, graded: boolean) {
   return { label: 'Open', color: 'slate' as const };
 }
 
-export default function AssignmentsPage() {
+export default function AssignmentsPage({ onNavigate }: { onNavigate?: (id: string) => void }) {
   const { profile } = useAuth();
   const role = profile?.role ?? 'student';
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -126,7 +126,12 @@ export default function AssignmentsPage() {
           </p>
         </div>
         {role === 'professor' && (
-          <Button variant="gradient" onClick={() => { setEditing(null); setShowForm(true); }} disabled={courses.length === 0}>
+          <Button
+            variant="gradient"
+            onClick={() => { setEditing(null); setShowForm(true); }}
+            disabled={courses.length === 0}
+            title={courses.length === 0 ? 'Create a course first — assignments must belong to a course.' : undefined}
+          >
             <Plus size={16} /> New Assignment
           </Button>
         )}
@@ -143,7 +148,8 @@ export default function AssignmentsPage() {
           <EmptyState
             icon={<ClipboardCheck size={32} className="text-primary-400" />}
             title="Create a course first"
-            description="You need at least one course before you can create assignments."
+            description="Assignments belong to a course — create one first, then come back here to add assignments."
+            action={onNavigate ? <Button variant="gradient" onClick={() => onNavigate('courses')}><Plus size={16} /> Create a Course</Button> : undefined}
           />
         </Card>
       ) : assignments.length === 0 ? (
