@@ -96,16 +96,6 @@ const handleDemoLogin = async (demoEmail: string, demoPassword: string) => {
           </p>
         </div>
 
-        {/* Stats */}
-        <div className="relative z-10 grid grid-cols-3 gap-4">
-          {[['50K+', 'Active Learners'], ['4.9★', 'Platform Rating'], ['95%', 'Job Placement']].map(([v, l]) => (
-            <div key={l} className="rounded-2xl p-4 text-center" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <p className="text-xl font-black text-white">{v}</p>
-              <p className="text-xs text-slate-400 mt-1">{l}</p>
-            </div>
-          ))}
-        </div>
-
         <p className="relative z-10 text-slate-500 text-sm text-center">© 2026 EduNexus Learning Systems</p>
       </div>
 

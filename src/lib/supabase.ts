@@ -189,8 +189,35 @@ export interface Exam {
   allow_resume: boolean;
   auto_evaluate: boolean;
   publish_date: string;
-  status: 'draft' | 'published' | 'closed';
+  scheduled_start?: string | null;
+  scheduled_end?: string | null;
+  status: 'draft' | 'published' | 'closed' | 'archived';
   created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExamRegistration {
+  id: string;
+  exam_id: string;
+  student_id: string;
+  registered_at: string;
+  registered_by: string | null;
+}
+
+export interface Certificate {
+  id: string;
+  student_id: string;
+  course_id: string;
+  cert_number: string | null;
+  grade: number | null;
+  professor_cleared: boolean;
+  professor_cleared_by: string | null;
+  professor_cleared_at: string | null;
+  finance_cleared_at: string | null;
+  status: 'pending' | 'issued' | 'revoked';
+  issued_by: string | null;
+  issued_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -219,7 +246,7 @@ export interface ExamAttempt {
 
 export interface KpiConfig {
   id: string;
-  role: 'professor' | 'student';
+  role: 'admin' | 'professor' | 'student';
   name: string;
   metric_key: string;
   target_value: number;

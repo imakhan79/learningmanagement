@@ -224,7 +224,7 @@ async function loadStudent(setData: (d: any) => void, studentId: string) {
     upcoming,
     attendanceRate,
     latestScores,
-    courseList: enr.map((e: any) => ({ id: e.course?.id, title: e.course?.title, progress: e.progress_pct, status: e.status })),
+    courseList: enr.map((e: any) => ({ id: e.id, title: e.course?.title || 'Course unavailable', progress: e.progress_pct, status: e.status })),
     attendanceLog: prog.filter((p: any) => p.total_watch_seconds > 0).map((p: any) => ({
       id: p.id,
       lectureTitle: p.lecture?.title,

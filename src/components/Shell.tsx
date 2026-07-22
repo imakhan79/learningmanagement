@@ -4,7 +4,7 @@ import {
   Bell, Settings, LogOut, GraduationCap, FileText, Target,
   ScrollText, Search, X, ChevronRight, DollarSign,
   User, Sparkles, Menu, Radio, Shield, Award, ClipboardCheck,
-  CalendarDays, Bookmark, Loader2,
+  CalendarDays, Bookmark, Loader2, Briefcase, Layers, CalendarClock, FileQuestion, Film, Gauge, Wallet,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
@@ -25,9 +25,16 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'kpis',        label: 'KPI Monitor',     icon: <Target size={18}/>,          roles: ['admin','professor'],           group: 'insights' },
   { id: 'reports',     label: 'Reports',         icon: <FileText size={18}/>,        roles: ['admin','professor','student'], group: 'insights' },
   { id: 'alerts',      label: 'Alerts',          icon: <Bell size={18}/>,            roles: ['admin','professor','student'], group: 'insights' },
+  { id: 'hrhub',       label: 'HR Hub',          icon: <Briefcase size={18}/>,       roles: ['admin'],                       group: 'admin' },
+  { id: 'courseshub',  label: 'Courses Hub',     icon: <Layers size={18}/>,          roles: ['admin'],                       group: 'admin' },
+  { id: 'examshub',    label: 'Exams Hub',       icon: <CalendarClock size={18}/>,   roles: ['admin'],                       group: 'admin' },
+  { id: 'questionshub',label: 'Questions Hub',   icon: <FileQuestion size={18}/>,    roles: ['admin'],                       group: 'admin' },
+  { id: 'learninghub', label: 'Learning Hub',    icon: <Film size={18}/>,            roles: ['admin'],                       group: 'admin' },
+  { id: 'performancehub', label: 'Performance Hub', icon: <Gauge size={18}/>,        roles: ['admin'],                       group: 'admin' },
+  { id: 'financehub',  label: 'Finance Hub',     icon: <Wallet size={18}/>,          roles: ['admin'],                       group: 'admin' },
   { id: 'users',       label: 'Users',           icon: <Users size={18}/>,           roles: ['admin'],                       group: 'admin' },
   { id: 'questionbank',label: 'Question Bank',   icon: <ClipboardList size={18}/>,   roles: ['admin','professor'],           group: 'admin' },
-  { id: 'finance',     label: 'Finance',         icon: <DollarSign size={18}/>,      roles: ['admin','student'],             group: 'admin' },
+  { id: 'finance',     label: 'Finance',         icon: <DollarSign size={18}/>,      roles: ['student'],                     group: 'personal' },
   { id: 'audit',       label: 'Audit Logs',      icon: <Shield size={18}/>,          roles: ['admin'],                       group: 'admin' },
   { id: 'settings',    label: 'Settings',        icon: <Settings size={18}/>,        roles: ['admin'],                       group: 'admin' },
   { id: 'certificates',label: 'Certificates',    icon: <Award size={18}/>,           roles: ['student'],                     group: 'personal' },

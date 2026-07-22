@@ -137,6 +137,32 @@ export async function evaluateUserKPIs(userId: string, role: string) {
           .lt('updated_at', periodEnd);
         actual = count || 0;
       }
+      else if (cfg.metric_key === 'courses_approved' && role === 'admin') {
+        const { count } = await supabase
+          .from('courses')
+          .select('id', { count: 'exact', head: true })
+          .in('status', ['approved', 'published'])
+          .gte('updated_at', periodStart)
+          .lt('updated_at', periodEnd);
+        actual = count || 0;
+      }
+      else if (cfg.metric_key === 'certificates_issued' && role === 'admin') {
+        const { count } = await supabase
+          .from('certificates')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'issued')
+          .gte('issued_at', periodStart)
+          .lt('issued_at', periodEnd);
+        actual = count || 0;
+      }
+      else if (cfg.metric_key === 'new_users_onboarded' && role === 'admin') {
+        const { count } = await supabase
+          .from('profiles')
+          .select('id', { count: 'exact', head: true })
+          .gte('created_at', periodStart)
+          .lt('created_at', periodEnd);
+        actual = count || 0;
+      }
 
       // 3. Evaluate Status
       const meetsTarget = cfg.comparison === 'gte' ? actual >= cfg.target_value 

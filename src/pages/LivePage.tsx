@@ -35,6 +35,7 @@ import {
   deleteSessionRecording,
   getEnrolledUsersForCourse,
   scheduleSessionReminders,
+  getProviderStatuses,
   type LiveSession,
   type LiveSessionRecording,
 } from '../lib/liveStreaming';
@@ -197,6 +198,16 @@ export default function LivePage() {
   });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [providerStatus, setProviderStatus] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!canManage) return;
+    getProviderStatuses().then(({ data }) => {
+      const m: Record<string, boolean> = {};
+      (data || []).forEach((s: any) => { m[s.provider] = s.is_configured; });
+      setProviderStatus(m);
+    });
+  }, [canManage]);
 
   // ── Edit modal ──
   const [showEdit, setShowEdit] = useState(false);
@@ -214,7 +225,7 @@ export default function LivePage() {
 
     if (canManage) {
       const query = role === 'professor'
-        ? supabase.from('courses').select('id, title').eq('instructor_id', profile.id)
+        ? supabase.from('courses').select('id, title').eq('professor_id', profile.id)
         : supabase.from('courses').select('id, title');
       const { data: c } = await query;
       setCourses(c || []);
@@ -307,6 +318,7 @@ export default function LivePage() {
     setFormError('');
     const { error: e } = await createLiveSession({
       ...form,
+      end_at: form.end_at || undefined,
       // Map all non-free, non-paid provider IDs to 'paid' for DB storage
       provider: form.provider === 'free' ? 'free' : 'paid',
       instructor_id: profile!.id,
@@ -341,7 +353,7 @@ export default function LivePage() {
     }
     setEditSaving(true);
     setEditError('');
-    const { error: e } = await updateLiveSession(detailSession.id, editForm);
+    const { error: e } = await updateLiveSession(detailSession.id, { ...editForm, end_at: editForm.end_at || undefined });
     setEditSaving(false);
     if (e) { setEditError(e.message); return; }
     setShowEdit(false);
@@ -1010,6 +1022,14 @@ export default function LivePage() {
 
                         {/* Short description */}
                         <p className="text-xs text-slate-400 leading-snug line-clamp-2">{p.shortDesc}</p>
+
+                        {/* Connection status for providers with configurable API keys */}
+                        {p.authenticationRequired && (
+                          <span className={`inline-flex items-center gap-1 mt-2 text-[11px] font-bold ${providerStatus[p.id] ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${providerStatus[p.id] ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                            {providerStatus[p.id] ? 'API Key Connected' : 'Not Configured'}
+                          </span>
+                        )}
                       </button>
                     );
                   })}

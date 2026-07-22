@@ -1,36 +1,20 @@
 import { useState, useEffect } from 'react';
 import {
   DollarSign,
-  Plus,
-  FileText,
   CreditCard,
   History,
   CheckCircle2,
   XCircle,
   AlertCircle,
-  TrendingUp,
-  Tag,
-  Undo2,
   Download,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
-import { supabase } from '../lib/supabase';
 import {
-  FeeStructure,
   FeeAssessment,
   FeePayment,
-  FeeDiscount,
-  getFeeStructures,
-  getAllAssessments,
-  getAllPayments,
-  getDiscounts,
   getStudentAssessments,
   getStudentPayments,
-  createFeeStructure,
-  assessFeeToStudent,
-  createDiscount,
   simulateOnlinePayment,
-  updatePaymentStatus,
 } from '../lib/feeManagement';
 import { Spinner, Badge, formatDateTime } from '../components/ui';
 
@@ -61,10 +45,10 @@ const STATUS_COLORS: Record<string, 'green' | 'rose' | 'amber' | 'slate' | 'blue
 
 // ─────────────────────────────────────────
 // MAIN COMPONENT
+// Admin fee management lives in Finance Hub; this page is student-only.
 // ─────────────────────────────────────────
 export default function FinancePage() {
   const { profile } = useAuth();
-  const isAdmin = profile?.role === 'admin';
 
   if (!profile) return <div className="p-12 flex justify-center"><Spinner /></div>;
 
@@ -76,292 +60,11 @@ export default function FinancePage() {
             <DollarSign size={28} className="text-primary-600 drop-shadow-sm" />
             Finance & Fees
           </h1>
-          <p className="text-slate-500 font-medium">Manage invoices, payments, and financial records</p>
+          <p className="text-slate-500 font-medium">Your invoices, payments, and financial records</p>
         </div>
       </div>
 
-      {isAdmin ? <AdminFinanceView /> : <StudentFinanceView studentId={profile.id} />}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────
-// ADMIN VIEW
-// ─────────────────────────────────────────
-function AdminFinanceView() {
-  const [tab, setTab] = useState<'assessments' | 'structures' | 'payments' | 'discounts'>('assessments');
-  const [loading, setLoading] = useState(true);
-
-  // Data
-  const [structures, setStructures] = useState<FeeStructure[]>([]);
-  const [assessments, setAssessments] = useState<FeeAssessment[]>([]);
-  const [payments, setPayments] = useState<FeePayment[]>([]);
-  const [discounts, setDiscounts] = useState<FeeDiscount[]>([]);
-  const [students, setStudents] = useState<any[]>([]);
-  const [courses, setCourses] = useState<any[]>([]);
-
-  // Modals
-  const [showStructureModal, setShowStructureModal] = useState(false);
-  const [showAssessmentModal, setShowAssessmentModal] = useState(false);
-
-  // Form States
-  const [structForm, setStructForm] = useState<Partial<FeeStructure>>({ fee_type: 'tuition', frequency: 'one-time', status: 'active', currency: 'USD' });
-  const [assessForm, setAssessForm] = useState({ student_id: '', fee_structure_id: '', amount: 0, due_date: '' });
-
-  async function loadData() {
-    setLoading(true);
-    const [sRes, aRes, pRes, dRes, stuRes, crsRes] = await Promise.all([
-      getFeeStructures(),
-      getAllAssessments(),
-      getAllPayments(),
-      getDiscounts(),
-      supabase.from('profiles').select('id, full_name, email').eq('role', 'student'),
-      supabase.from('courses').select('id, title')
-    ]);
-    setStructures(sRes.data || []);
-    setAssessments(aRes.data || []);
-    setPayments(pRes.data || []);
-    setDiscounts(dRes.data || []);
-    setStudents(stuRes.data || []);
-    setCourses(crsRes.data || []);
-    setLoading(false);
-  }
-
-  useEffect(() => { loadData(); }, []);
-
-  async function handleCreateStructure() {
-    if (!structForm.title || !structForm.amount) return;
-    await createFeeStructure(structForm);
-    setShowStructureModal(false);
-    loadData();
-  }
-
-  async function handleAssessFee() {
-    if (!assessForm.student_id || !assessForm.fee_structure_id || !assessForm.amount || !assessForm.due_date) return;
-    await assessFeeToStudent(assessForm.student_id, assessForm.fee_structure_id, assessForm.amount, assessForm.due_date);
-    setShowAssessmentModal(false);
-    loadData();
-  }
-
-  if (loading) return <div className="p-12 flex justify-center"><Spinner /></div>;
-
-  return (
-    <div className="space-y-8">
-      {/* Tabs */}
-      <div className="flex items-center gap-2 p-1.5 bg-slate-100 rounded-2xl w-fit overflow-x-auto shadow-inner-soft">
-        {(['assessments', 'structures', 'payments', 'discounts'] as const).map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 capitalize whitespace-nowrap ${
-              tab === t ? 'bg-white text-primary-700 shadow-sm scale-100' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      {/* ASSESSMENTS TAB */}
-      {tab === 'assessments' && (
-        <div className="space-y-6 animate-fade-in">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-slate-800 tracking-tight">Student Invoices</h2>
-            <button onClick={() => setShowAssessmentModal(true)} className="btn-gradient px-5 py-2.5 text-sm">
-              <Plus size={16} className="mr-2" /> Bill Student
-            </button>
-          </div>
-          <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden shadow-sm">
-            <table className="w-full text-left text-sm text-slate-600">
-              <thead className="bg-slate-50 border-b border-slate-100 text-xs uppercase text-slate-400 font-black tracking-widest">
-                <tr>
-                  <th className="px-6 py-4">Student</th>
-                  <th className="px-6 py-4">Fee Type</th>
-                  <th className="px-6 py-4 text-right">Assessed</th>
-                  <th className="px-6 py-4 text-right">Paid</th>
-                  <th className="px-6 py-4 text-center">Status</th>
-                  <th className="px-6 py-4">Due Date</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {assessments.map(a => (
-                  <tr key={a.id} className="hover:bg-slate-50/80 transition-colors group">
-                    <td className="px-6 py-4 font-bold text-slate-800">{a.student?.full_name || a.student?.email}</td>
-                    <td className="px-6 py-4 font-medium">{a.structure?.title}</td>
-                    <td className="px-6 py-4 text-right font-black text-slate-700">{formatCurrency(a.amount_assessed)}</td>
-                    <td className="px-6 py-4 text-right font-black text-success-600">{formatCurrency(a.amount_paid)}</td>
-                    <td className="px-6 py-4 text-center">
-                      <Badge color={STATUS_COLORS[a.status]} className="shadow-sm">{a.status}</Badge>
-                    </td>
-                    <td className="px-6 py-4 font-medium text-slate-500">{new Date(a.due_date).toLocaleDateString()}</td>
-                  </tr>
-                ))}
-                {assessments.length === 0 && (
-                  <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-medium">No assessments found</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* STRUCTURES TAB */}
-      {tab === 'structures' && (
-        <div className="space-y-6 animate-fade-in">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-slate-800 tracking-tight">Fee Structures</h2>
-            <button onClick={() => setShowStructureModal(true)} className="btn-gradient px-5 py-2.5 text-sm">
-              <Plus size={16} className="mr-2" /> New Structure
-            </button>
-          </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {structures.map(s => (
-              <div key={s.id} className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm card-hover flex flex-col relative overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-primary-400 to-primary-600" />
-                <div className="flex items-start justify-between mb-4 mt-2">
-                  <h3 className="font-bold text-slate-800 text-lg tracking-tight line-clamp-1">{s.title}</h3>
-                  <Badge color={STATUS_COLORS[s.status]} className="shadow-sm">{s.status}</Badge>
-                </div>
-                <div className="text-3xl font-black text-primary-600 mb-6">{formatCurrency(s.amount, s.currency)}</div>
-                <div className="space-y-2 mt-auto text-sm text-slate-500 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  <p className="flex justify-between font-medium"><span className="text-slate-400">Type:</span> <span className="capitalize font-bold text-slate-700">{s.fee_type}</span></p>
-                  <p className="flex justify-between font-medium"><span className="text-slate-400">Frequency:</span> <span className="capitalize font-bold text-slate-700">{s.frequency}</span></p>
-                  {s.course_id && <p className="flex justify-between font-medium"><span className="text-slate-400">Course:</span> <span className="font-bold text-slate-700 truncate ml-2">{(s as any).course?.title}</span></p>}
-                </div>
-              </div>
-            ))}
-            {structures.length === 0 && (
-              <div className="col-span-full py-16 text-center text-slate-400 font-medium">No fee structures configured.</div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* PAYMENTS TAB */}
-      {tab === 'payments' && (
-        <div className="space-y-6 animate-fade-in">
-          <h2 className="text-xl font-bold text-slate-800 tracking-tight">Transaction History</h2>
-          <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden shadow-sm">
-            <table className="w-full text-left text-sm text-slate-600">
-              <thead className="bg-slate-50 border-b border-slate-100 text-xs uppercase text-slate-400 font-black tracking-widest">
-                <tr>
-                  <th className="px-6 py-4">Date</th>
-                  <th className="px-6 py-4">Ref / Method</th>
-                  <th className="px-6 py-4">Student</th>
-                  <th className="px-6 py-4">Assessment</th>
-                  <th className="px-6 py-4 text-right">Amount</th>
-                  <th className="px-6 py-4 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {payments.map(p => (
-                  <tr key={p.id} className="hover:bg-slate-50/80 transition-colors group">
-                    <td className="px-6 py-4 whitespace-nowrap font-medium text-slate-500">{formatDateTime(p.created_at)}</td>
-                    <td className="px-6 py-4">
-                      <div className="font-bold text-slate-800">{p.reference_number || 'N/A'}</div>
-                      <div className="text-xs font-medium uppercase tracking-wider text-slate-400">{p.payment_method.replace('_', ' ')}</div>
-                    </td>
-                    <td className="px-6 py-4 font-bold text-slate-800">{p.student?.full_name || p.student?.email}</td>
-                    <td className="px-6 py-4 font-medium text-slate-700">{p.assessment?.structure?.title || 'Unknown Fee'}</td>
-                    <td className="px-6 py-4 text-right font-black text-success-600">{formatCurrency(p.amount)}</td>
-                    <td className="px-6 py-4 text-center"><Badge color={STATUS_COLORS[p.status]} className="shadow-sm">{p.status}</Badge></td>
-                  </tr>
-                ))}
-                {payments.length === 0 && (
-                  <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-medium">No payments found</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* DISCOUNTS TAB */}
-      {tab === 'discounts' && (
-        <div className="space-y-6 animate-fade-in">
-          <h2 className="text-xl font-bold text-slate-800 tracking-tight">Discounts & Scholarships</h2>
-          <div className="p-12 text-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50">
-            <Tag size={48} className="mx-auto text-slate-300 mb-4 opacity-50" />
-            <p className="text-slate-600 font-bold text-lg mb-2">Manage financial aid and generic discounts.</p>
-            <p className="text-slate-400 font-medium">You can map these to student assessments via the API.</p>
-          </div>
-        </div>
-      )}
-
-      {/* MODALS */}
-      {showStructureModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 space-y-6">
-            <h3 className="text-2xl font-black text-slate-800 tracking-tight">New Fee Structure</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="label">Title</label>
-                <input type="text" className="input" value={structForm.title || ''} onChange={e => setStructForm({ ...structForm, title: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Amount</label>
-                  <input type="number" className="input" value={structForm.amount || ''} onChange={e => setStructForm({ ...structForm, amount: Number(e.target.value) })} />
-                </div>
-                <div>
-                  <label className="label">Type</label>
-                  <select className="input" value={structForm.fee_type} onChange={e => setStructForm({ ...structForm, fee_type: e.target.value })}>
-                    <option value="tuition">Tuition</option>
-                    <option value="exam">Exam</option>
-                    <option value="library">Library</option>
-                    <option value="miscellaneous">Misc</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-4 pt-6 mt-6 border-t border-slate-100">
-              <button onClick={() => setShowStructureModal(false)} className="flex-1 py-3 text-slate-600 hover:bg-slate-100 rounded-xl font-bold transition-colors">Cancel</button>
-              <button onClick={handleCreateStructure} className="flex-1 py-3 btn-gradient">Create Structure</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showAssessmentModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 space-y-6">
-            <h3 className="text-2xl font-black text-slate-800 tracking-tight">Bill a Student</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="label">Student</label>
-                <select className="input" value={assessForm.student_id} onChange={e => setAssessForm({ ...assessForm, student_id: e.target.value })}>
-                  <option value="">Select student...</option>
-                  {students.map(s => <option key={s.id} value={s.id}>{s.full_name || s.email}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="label">Fee Structure</label>
-                <select className="input" value={assessForm.fee_structure_id} onChange={e => {
-                  const struct = structures.find(s => s.id === e.target.value);
-                  setAssessForm({ ...assessForm, fee_structure_id: e.target.value, amount: struct?.amount || 0 });
-                }}>
-                  <option value="">Select structure...</option>
-                  {structures.map(s => <option key={s.id} value={s.id}>{s.title} ({formatCurrency(s.amount)})</option>)}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Amount</label>
-                  <input type="number" className="input" value={assessForm.amount} onChange={e => setAssessForm({ ...assessForm, amount: Number(e.target.value) })} />
-                </div>
-                <div>
-                  <label className="label">Due Date</label>
-                  <input type="date" className="input" value={assessForm.due_date} onChange={e => setAssessForm({ ...assessForm, due_date: e.target.value })} />
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-4 pt-6 mt-6 border-t border-slate-100">
-              <button onClick={() => setShowAssessmentModal(false)} className="flex-1 py-3 text-slate-600 hover:bg-slate-100 rounded-xl font-bold transition-colors">Cancel</button>
-              <button onClick={handleAssessFee} className="flex-1 py-3 btn-gradient">Generate Invoice</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <StudentFinanceView studentId={profile.id} />
     </div>
   );
 }
@@ -402,6 +105,8 @@ function StudentFinanceView({ studentId }: { studentId: string }) {
 
   async function handlePay() {
     if (!payModal.assessment) return;
+    const balance = payModal.assessment.amount_assessed - payModal.assessment.amount_paid;
+    if (payAmount <= 0 || payAmount > balance) return;
     setIsProcessing(true);
     const res = await simulateOnlinePayment(studentId, payModal.assessment.id, payAmount, 'online_gateway');
     setIsProcessing(false);
@@ -618,7 +323,7 @@ function StudentFinanceView({ studentId }: { studentId: string }) {
                   <div className="pt-2">
                     <button
                       onClick={handlePay}
-                      disabled={isProcessing || payAmount <= 0}
+                      disabled={isProcessing || payAmount <= 0 || payAmount > (payModal.assessment.amount_assessed - payModal.assessment.amount_paid)}
                       className="w-full flex items-center justify-center gap-2 py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl font-black text-lg hover:from-emerald-600 hover:to-teal-700 disabled:opacity-50 transition-all shadow-lg shadow-emerald-500/25 active:scale-[0.98]"
                     >
                       {isProcessing ? (

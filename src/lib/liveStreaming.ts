@@ -33,6 +33,32 @@ export interface LiveSessionRecording {
   created_at: string;
 }
 
+export interface MeetingProviderSetting {
+  provider: 'zoom' | 'google_meet' | 'teams';
+  api_key: string | null;
+  api_secret: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+/** Secret-free connection status for every provider (readable by any authenticated user). */
+export async function getProviderStatuses() {
+  return supabase.from('meeting_provider_status').select('*');
+}
+
+/** Full settings rows including keys/secrets (admin-only, enforced by RLS). */
+export async function getProviderSettings() {
+  return supabase.from('meeting_provider_settings').select('*');
+}
+
+/** Admin saves/updates the API key + secret for a provider. */
+export async function saveProviderSetting(provider: 'zoom' | 'google_meet' | 'teams', apiKey: string, apiSecret: string, userId: string) {
+  return supabase.from('meeting_provider_settings').upsert({
+    provider, api_key: apiKey || null, api_secret: apiSecret || null,
+    updated_at: new Date().toISOString(), updated_by: userId,
+  }, { onConflict: 'provider' }).select().single();
+}
+
 /**
  * Generate a Jitsi Meet room URL (free provider).
  * Room name is derived from the session ID to ensure uniqueness.
