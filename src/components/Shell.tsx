@@ -2,7 +2,7 @@ import { ReactNode, useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard, BookOpen, Users, ClipboardList, BarChart3,
   Bell, Settings, LogOut, GraduationCap, FileText, Target,
-  ScrollText, Search, X, ChevronRight, DollarSign,
+  ScrollText, Search, X, ChevronRight, ChevronDown, DollarSign,
   User, Sparkles, Menu, Radio, Shield, Award, ClipboardCheck,
   CalendarDays, Bookmark, Loader2, Briefcase, Layers, CalendarClock, FileQuestion, Film, Gauge, Wallet,
 } from 'lucide-react';
@@ -10,30 +10,36 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { Role } from '../lib/supabase';
 
-export interface NavItem { id: string; label: string; icon: ReactNode; roles: Role[]; group: string; }
+export interface NavChild { id: string; label: string; icon: ReactNode; }
+export interface NavItem { id: string; label: string; icon: ReactNode; roles: Role[]; group: string; children?: NavChild[]; }
 
 export const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard',    label: 'Dashboard',      icon: <LayoutDashboard size={18}/>, roles: ['admin','professor','student'], group: 'main' },
-  { id: 'courses',      label: 'Courses',         icon: <BookOpen size={18}/>,        roles: ['admin','professor','student'], group: 'main' },
+  { id: 'alerts',       label: 'Alerts Hub',      icon: <Bell size={18}/>,            roles: ['admin'],                       group: 'main' },
+  { id: 'courses',      label: 'Courses',         icon: <BookOpen size={18}/>,        roles: ['professor','student'],         group: 'main' },
   { id: 'lectures',     label: 'Lectures',        icon: <FileText size={18}/>,        roles: ['professor','student'],         group: 'main' },
   { id: 'assignments',  label: 'Assignments',     icon: <ClipboardCheck size={18}/>,  roles: ['professor','student'],         group: 'main' },
   { id: 'library',      label: 'PDFs & Notes',    icon: <FileText size={18}/>,        roles: ['student'],                     group: 'main' },
-  { id: 'live',         label: 'Live Sessions',   icon: <Radio size={18}/>,           roles: ['admin','professor','student'], group: 'main' },
-  { id: 'exams',        label: 'Exams',           icon: <ScrollText size={18}/>,      roles: ['admin','professor','student'], group: 'main' },
+  { id: 'live',         label: 'Live Sessions',   icon: <Radio size={18}/>,           roles: ['professor','student'],         group: 'main' },
+  { id: 'exams',        label: 'Exams',           icon: <ScrollText size={18}/>,      roles: ['professor','student'],         group: 'main' },
   { id: 'attendance',   label: 'Attendance',      icon: <CalendarDays size={18}/>,    roles: ['professor','student'],         group: 'main' },
-  { id: 'analytics',   label: 'Analytics',       icon: <BarChart3 size={18}/>,       roles: ['admin','professor','student'], group: 'insights' },
-  { id: 'kpis',        label: 'KPI Monitor',     icon: <Target size={18}/>,          roles: ['admin','professor'],           group: 'insights' },
-  { id: 'reports',     label: 'Reports',         icon: <FileText size={18}/>,        roles: ['admin','professor','student'], group: 'insights' },
-  { id: 'alerts',      label: 'Alerts',          icon: <Bell size={18}/>,            roles: ['admin','professor','student'], group: 'insights' },
+  { id: 'analytics',   label: 'Analytics',       icon: <BarChart3 size={18}/>,       roles: ['professor','student'],         group: 'insights' },
+  { id: 'kpis',        label: 'KPI Monitor',     icon: <Target size={18}/>,          roles: ['professor'],                   group: 'insights' },
+  { id: 'reports',     label: 'Reports',         icon: <FileText size={18}/>,        roles: ['professor','student'],         group: 'insights' },
+  { id: 'alerts',      label: 'Alerts',          icon: <Bell size={18}/>,            roles: ['professor','student'],         group: 'insights' },
   { id: 'hrhub',       label: 'HR Hub',          icon: <Briefcase size={18}/>,       roles: ['admin'],                       group: 'admin' },
   { id: 'courseshub',  label: 'Courses Hub',     icon: <Layers size={18}/>,          roles: ['admin'],                       group: 'admin' },
   { id: 'examshub',    label: 'Exams Hub',       icon: <CalendarClock size={18}/>,   roles: ['admin'],                       group: 'admin' },
   { id: 'questionshub',label: 'Questions Hub',   icon: <FileQuestion size={18}/>,    roles: ['admin'],                       group: 'admin' },
   { id: 'learninghub', label: 'Learning Hub',    icon: <Film size={18}/>,            roles: ['admin'],                       group: 'admin' },
-  { id: 'performancehub', label: 'Performance Hub', icon: <Gauge size={18}/>,        roles: ['admin'],                       group: 'admin' },
+  { id: 'performancehub', label: 'Performance Hub', icon: <Gauge size={18}/>,        roles: ['admin'],                       group: 'admin',
+    children: [
+      { id: 'kpis',      label: 'KPI Management', icon: <Target size={18}/> },
+      { id: 'reports',   label: 'Reports',        icon: <FileText size={18}/> },
+    ] },
   { id: 'financehub',  label: 'Finance Hub',     icon: <Wallet size={18}/>,          roles: ['admin'],                       group: 'admin' },
   { id: 'users',       label: 'Users',           icon: <Users size={18}/>,           roles: ['admin'],                       group: 'admin' },
-  { id: 'questionbank',label: 'Question Bank',   icon: <ClipboardList size={18}/>,   roles: ['admin','professor'],           group: 'admin' },
+  { id: 'questionbank',label: 'Question Bank',   icon: <ClipboardList size={18}/>,   roles: ['professor'],                   group: 'admin' },
   { id: 'finance',     label: 'Finance',         icon: <DollarSign size={18}/>,      roles: ['student'],                     group: 'personal' },
   { id: 'audit',       label: 'Audit Logs',      icon: <Shield size={18}/>,          roles: ['admin'],                       group: 'admin' },
   { id: 'settings',    label: 'Settings',        icon: <Settings size={18}/>,        roles: ['admin'],                       group: 'admin' },
@@ -63,6 +69,152 @@ const ROLE_STYLE: Record<string, { grad: string; badge: string; label: string }>
   student:   { grad: 'from-emerald-500 to-teal-600',   badge: 'bg-emerald-500',label: 'Student' },
 };
 
+interface NavGroup { id: string; label: string; items: NavItem[]; }
+
+function NavContent({
+  navGroups, active, expandedIds, toggleExpanded, onNavigate, alertsCount,
+  roleLabel, roleGrad, fullName, email, initials, signOut, onClose,
+}: {
+  navGroups: NavGroup[];
+  active: string;
+  expandedIds: Set<string>;
+  toggleExpanded: (id: string) => void;
+  onNavigate: (id: string) => void;
+  alertsCount: number;
+  roleLabel: string;
+  roleGrad: string;
+  fullName: string;
+  email: string;
+  initials: string;
+  signOut: () => void;
+  onClose?: () => void;
+}) {
+  return (
+    <div className="flex flex-col h-full">
+      {/* Logo */}
+      <div className="px-5 py-5 flex items-center justify-between border-b border-white/8">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+               style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', boxShadow: '0 4px 12px rgba(99,102,241,0.5)' }}>
+            <GraduationCap size={18} className="text-white" />
+          </div>
+          <div>
+            <p className="text-white font-bold text-sm tracking-tight">EduNexus</p>
+            <p className="text-slate-400 text-xs">{roleLabel} Portal</p>
+          </div>
+        </div>
+        {onClose && (
+          <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors">
+            <X size={18} />
+          </button>
+        )}
+      </div>
+
+      {/* Nav groups */}
+      <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-5 scrollbar-hide">
+        {navGroups.map(g => (
+          <div key={g.id}>
+            {g.id !== 'main' && (
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-1.5">{g.label}</p>
+            )}
+            <div className="space-y-0.5">
+              {g.items.map(item => {
+                const isActive = active === item.id;
+                const hasChildren = !!item.children?.length;
+                const childActive = hasChildren && item.children!.some(c => c.id === active);
+                const isExpanded = hasChildren && (expandedIds.has(item.id) || childActive);
+                return (
+                  <div key={item.id}>
+                    <button
+                      onClick={() => { onNavigate(item.id); if (hasChildren) { if (!expandedIds.has(item.id)) toggleExpanded(item.id); } else { onClose?.(); } }}
+                      aria-current={isActive ? 'page' : undefined}
+                      aria-expanded={hasChildren ? isExpanded : undefined}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative ${
+                        isActive
+                          ? 'text-white'
+                          : 'text-slate-400 hover:bg-white/8 hover:text-white'
+                      }`}
+                      style={isActive ? {
+                        background: 'linear-gradient(135deg,#4f46e5,#6366f1)',
+                        boxShadow: '0 4px 14px rgba(79,70,229,0.40)',
+                      } : undefined}
+                    >
+                      <span className={`transition-transform duration-200 group-hover:scale-110 ${isActive ? 'text-white' : ''}`}>
+                        {item.icon}
+                      </span>
+                      <span className="flex-1 text-left">{item.label}</span>
+                      {item.id === 'alerts' && alertsCount > 0 && (
+                        <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
+                          {alertsCount > 99 ? '99+' : alertsCount}
+                        </span>
+                      )}
+                      {hasChildren ? (
+                        <ChevronDown
+                          size={14}
+                          className={`opacity-60 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                          onClick={(e) => { e.stopPropagation(); toggleExpanded(item.id); }}
+                        />
+                      ) : (
+                        isActive && <ChevronRight size={13} className="opacity-60" />
+                      )}
+                    </button>
+                    {hasChildren && isExpanded && (
+                      <div className="mt-0.5 ml-4 pl-3 border-l border-white/10 space-y-0.5">
+                        {item.children!.map(child => {
+                          const childIsActive = active === child.id;
+                          return (
+                            <button
+                              key={child.id}
+                              onClick={() => { onNavigate(child.id); onClose?.(); }}
+                              aria-current={childIsActive ? 'page' : undefined}
+                              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative ${
+                                childIsActive
+                                  ? 'text-white'
+                                  : 'text-slate-400 hover:bg-white/8 hover:text-white'
+                              }`}
+                              style={childIsActive ? {
+                                background: 'linear-gradient(135deg,#4f46e5,#6366f1)',
+                                boxShadow: '0 4px 14px rgba(79,70,229,0.40)',
+                              } : undefined}
+                            >
+                              <span className={`transition-transform duration-200 group-hover:scale-110 ${childIsActive ? 'text-white' : ''}`}>
+                                {child.icon}
+                              </span>
+                              <span className="flex-1 text-left">{child.label}</span>
+                              {childIsActive && <ChevronRight size={13} className="opacity-60" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </nav>
+
+      {/* User card */}
+      <div className="px-3 pb-4 pt-3 border-t border-white/8">
+        <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 transition-colors">
+          <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${roleGrad} flex items-center justify-center text-white text-xs font-bold shadow-md shrink-0`}>
+            {initials}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white truncate">{fullName}</p>
+            <p className="text-xs text-slate-400 truncate">{email}</p>
+          </div>
+          <button onClick={signOut} aria-label="Sign out"
+            className="text-slate-400 hover:text-red-400 p-1.5 rounded-lg hover:bg-white/10 transition-colors shrink-0">
+            <LogOut size={15} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Shell({
   active, onNavigate, children, alertsCount,
 }: {
@@ -74,15 +226,25 @@ export default function Shell({
   const [query, setQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{ id: string; label: string; sub: string; nav: string }[]>([]);
   const [searching, setSearching] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const role = profile?.role ?? 'student';
   const items = NAV_ITEMS.filter(i => i.roles.includes(role));
+  const flatItems = items.flatMap(i => (i.children ? [i, ...i.children] : [i]));
   const rs = ROLE_STYLE[role] || ROLE_STYLE.student;
   const initials = (profile?.full_name || profile?.email || '?').slice(0, 2).toUpperCase();
 
   const navGroups = GROUPS.map(g => ({
     ...g, items: items.filter(i => i.group === g.id),
   })).filter(g => g.items.length > 0);
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -114,93 +276,25 @@ export default function Shell({
     }, 300);
   }, [query, searchOpen, role, profile?.id]);
 
-  const NavContent = ({ onClose }: { onClose?: () => void }) => (
-    <div className="flex flex-col h-full">
-      {/* Logo */}
-      <div className="px-5 py-5 flex items-center justify-between border-b border-white/8">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-               style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', boxShadow: '0 4px 12px rgba(99,102,241,0.5)' }}>
-            <GraduationCap size={18} className="text-white" />
-          </div>
-          <div>
-            <p className="text-white font-bold text-sm tracking-tight">EduNexus</p>
-            <p className="text-slate-400 text-xs">{rs.label} Portal</p>
-          </div>
-        </div>
-        {onClose && (
-          <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors">
-            <X size={18} />
-          </button>
-        )}
-      </div>
-
-      {/* Nav groups */}
-      <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-5 scrollbar-hide">
-        {navGroups.map(g => (
-          <div key={g.id}>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-1.5">{g.label}</p>
-            <div className="space-y-0.5">
-              {g.items.map(item => {
-                const isActive = active === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => { onNavigate(item.id); onClose?.(); }}
-                    aria-current={isActive ? 'page' : undefined}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative ${
-                      isActive
-                        ? 'text-white'
-                        : 'text-slate-400 hover:bg-white/8 hover:text-white'
-                    }`}
-                    style={isActive ? {
-                      background: 'linear-gradient(135deg,#4f46e5,#6366f1)',
-                      boxShadow: '0 4px 14px rgba(79,70,229,0.40)',
-                    } : undefined}
-                  >
-                    <span className={`transition-transform duration-200 group-hover:scale-110 ${isActive ? 'text-white' : ''}`}>
-                      {item.icon}
-                    </span>
-                    <span className="flex-1 text-left">{item.label}</span>
-                    {item.id === 'alerts' && alertsCount > 0 && (
-                      <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
-                        {alertsCount > 99 ? '99+' : alertsCount}
-                      </span>
-                    )}
-                    {isActive && <ChevronRight size={13} className="opacity-60" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </nav>
-
-      {/* User card */}
-      <div className="px-3 pb-4 pt-3 border-t border-white/8">
-        <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 transition-colors">
-          <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${rs.grad} flex items-center justify-center text-white text-xs font-bold shadow-md shrink-0`}>
-            {initials}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white truncate">{profile?.full_name || 'User'}</p>
-            <p className="text-xs text-slate-400 truncate">{profile?.email}</p>
-          </div>
-          <button onClick={signOut} aria-label="Sign out"
-            className="text-slate-400 hover:text-red-400 p-1.5 rounded-lg hover:bg-white/10 transition-colors shrink-0">
-            <LogOut size={15} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-mesh flex">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex w-64 flex-col fixed inset-y-0 z-40"
              style={{ background: 'linear-gradient(180deg,#0f172a 0%,#1e1b4b 100%)', boxShadow: 'var(--shadow-sidebar)' }}>
-        <NavContent />
+        <NavContent
+          navGroups={navGroups}
+          active={active}
+          expandedIds={expandedIds}
+          toggleExpanded={toggleExpanded}
+          onNavigate={onNavigate}
+          alertsCount={alertsCount}
+          roleLabel={rs.label}
+          roleGrad={rs.grad}
+          fullName={profile?.full_name || 'User'}
+          email={profile?.email || ''}
+          initials={initials}
+          signOut={signOut}
+        />
       </aside>
 
       {/* Mobile drawer */}
@@ -209,7 +303,21 @@ export default function Shell({
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
           <aside className="relative w-72 flex flex-col animate-slide-right"
                  style={{ background: 'linear-gradient(180deg,#0f172a 0%,#1e1b4b 100%)' }}>
-            <NavContent onClose={() => setDrawerOpen(false)} />
+            <NavContent
+              navGroups={navGroups}
+              active={active}
+              expandedIds={expandedIds}
+              toggleExpanded={toggleExpanded}
+              onNavigate={onNavigate}
+              alertsCount={alertsCount}
+              roleLabel={rs.label}
+              roleGrad={rs.grad}
+              fullName={profile?.full_name || 'User'}
+              email={profile?.email || ''}
+              initials={initials}
+              signOut={signOut}
+              onClose={() => setDrawerOpen(false)}
+            />
           </aside>
         </div>
       )}
@@ -234,7 +342,7 @@ export default function Shell({
               <div className="hidden lg:flex items-center gap-2">
                 <span className="text-slate-400 text-sm">/</span>
                 <h2 className="font-semibold text-slate-800 text-sm">
-                  {NAV_ITEMS.find(i => i.id === active)?.label || 'Dashboard'}
+                  {flatItems.find(i => i.id === active)?.label || 'Dashboard'}
                 </h2>
               </div>
             </div>

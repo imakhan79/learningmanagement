@@ -6,7 +6,6 @@ import {
   Target,
   TrendingUp,
   Clock,
-  Award,
   CheckCircle2,
   AlertTriangle,
   Activity,
@@ -14,6 +13,9 @@ import {
   BarChart3,
   ChevronRight,
   Play,
+  ShieldCheck,
+  DollarSign,
+  Award,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
@@ -47,16 +49,31 @@ export default function DashboardPage({ onNavigate }: { onNavigate?: (id: string
 }
 
 async function loadAdmin(setData: (d: any) => void) {
-  const [students, professors, courses, activeUsers, alerts, enrollments, attempts, lectureActivity] = await Promise.all([
-    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'student'),
-    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'professor'),
-    supabase.from('courses').select('id, status, category'),
-    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [profilesRes, courses, alerts, enrollments, attempts, lectureActivity, payments, logins] = await Promise.all([
+    supabase.from('profiles').select('id, role, status, created_at'),
+    supabase.from('courses').select('id, status, category, created_at'),
     supabase.from('alerts').select('id, severity, title, message, created_at, read_at').order('created_at', { ascending: false }).limit(8),
-    supabase.from('enrollments').select('id, status, progress_pct'),
+    supabase.from('enrollments').select('id, status, progress_pct, enrolled_at'),
     supabase.from('exam_attempts').select('id, score, total_marks, status'),
-    supabase.from('lecture_activity').select('id, user_id, completed_at, total_watch_seconds')
+    supabase.from('lecture_activity').select('id, user_id, completed_at, total_watch_seconds'),
+    supabase.from('fee_payments').select('amount, status, created_at'),
+    supabase.from('login_events').select('user_id, login_at').gte('login_at', cutoff),
   ]);
+
+  const profileList = profilesRes.data || [];
+  const countBy = (pred: (p: any) => boolean, asOfCutoff = false) =>
+    profileList.filter((p) => pred(p) && (!asOfCutoff || p.created_at <= cutoff)).length;
+
+  const students = countBy((p) => p.role === 'student');
+  const studentsPrev = countBy((p) => p.role === 'student', true);
+  const professors = countBy((p) => p.role === 'professor');
+  const professorsPrev = countBy((p) => p.role === 'professor', true);
+  const adminUsers = countBy((p) => p.role === 'admin');
+  const adminUsersPrev = countBy((p) => p.role === 'admin', true);
+  const activeUsers = countBy((p) => p.status === 'active');
+  const activeUsersPrev = countBy((p) => p.status === 'active', true);
 
   const courseList = courses.data || [];
   const byStatus = {
@@ -65,11 +82,16 @@ async function loadAdmin(setData: (d: any) => void) {
     draft: courseList.filter((c) => c.status === 'draft').length,
     archived: courseList.filter((c) => c.status === 'archived').length,
   };
+  const coursesLive = byStatus.approved;
+  const coursesLivePrev = courseList.filter(
+    (c) => (c.status === 'approved' || c.status === 'published') && c.created_at <= cutoff
+  ).length;
+
   const categories: Record<string, number> = {};
   courseList.forEach((c) => { categories[c.category] = (categories[c.category] || 0) + 1; });
 
   const enrolled = enrollments.data || [];
-  const completed = enrolled.filter((e) => e.status === 'completed').length;
+  const completed = enrolled.filter((e) => e.status === 'completed' || e.progress_pct === 100).length;
   const avgProgress = enrolled.length ? enrolled.reduce((s, e) => s + (e.progress_pct || 0), 0) / enrolled.length : 0;
 
   const lectureAct = lectureActivity.data || [];
@@ -78,23 +100,67 @@ async function loadAdmin(setData: (d: any) => void) {
 
   const att = attempts.data || [];
   const avgScore = att.length ? att.reduce((s, a) => s + (a.score || 0), 0) / att.length : 0;
+  const passedAttempts = att.filter((a) => a.total_marks > 0 && a.score / a.total_marks >= 0.5).length;
+  const successRate = att.length ? (passedAttempts / att.length) * 100 : 0;
+
+  const activeLoginIds = new Set((logins.data || []).map((l) => l.user_id));
+  const activeStudentCount = profileList.filter((p) => p.role === 'student' && activeLoginIds.has(p.id)).length;
+  const engagementScore = students ? (activeStudentCount / students) * 100 : 0;
+
+  const growthMonths: string[] = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    growthMonths.push(new Date(now.getFullYear(), now.getMonth() - i, 1).toLocaleString(undefined, { month: 'short' }));
+  }
+  const growthByMonth = growthMonths.map((m, i) => {
+    const start = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() - (4 - i), 1);
+    return {
+      label: m,
+      users: profileList.filter((p) => new Date(p.created_at) >= start && new Date(p.created_at) < end).length,
+      enrollments: enrolled.filter((e) => e.enrolled_at && new Date(e.enrolled_at) >= start && new Date(e.enrolled_at) < end).length,
+    };
+  });
+
+  const completedPayments = (payments.data || []).filter((p) => p.status === 'completed');
+  const revenue = completedPayments.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const revenuePrev = completedPayments
+    .filter((p) => p.created_at <= cutoff)
+    .reduce((s, p) => s + Number(p.amount || 0), 0);
+
+  const growthPct = (current: number, prev: number) => {
+    if (!prev) return current > 0 ? 100 : 0;
+    return Math.round(((current - prev) / prev) * 100);
+  };
 
   setData({
-    students: students.count || 0,
-    professors: professors.count || 0,
+    students,
+    professors,
+    adminUsers,
+    activeUsers,
     courses: courseList.length,
-    activeUsers: activeUsers.count || 0,
+    coursesLive,
     pendingCourses: byStatus.pending,
     alerts: alerts.data || [],
     courseStatus: byStatus,
     categories: Object.entries(categories).map(([label, value]) => ({ label, value })),
     completionRate: enrolled.length ? Math.round((completed / enrolled.length) * 100) : 0,
+    successRate: Math.round(successRate),
+    engagementScore: Math.round(engagementScore),
+    growthByMonth,
     avgProgress: Math.round(avgProgress),
     avgScore: Math.round(avgScore),
     attempts: att.length,
-    systemLoad: Math.floor(Math.random() * 30) + 40,
-    revenue: 45200,
+    revenue,
     attendanceRate: Math.round(attendanceRate),
+    growth: {
+      activeUsers: growthPct(activeUsers, activeUsersPrev),
+      adminUsers: growthPct(adminUsers, adminUsersPrev),
+      professors: growthPct(professors, professorsPrev),
+      students: growthPct(students, studentsPrev),
+      coursesLive: growthPct(coursesLive, coursesLivePrev),
+      revenue: growthPct(revenue, revenuePrev),
+    },
   });
 }
 
@@ -238,22 +304,86 @@ async function loadStudent(setData: (d: any) => void, studentId: string) {
 }
 
 function AdminDashboard({ data }: { data: any }) {
+  const growth = data.growth || {};
+  const trendFor = (pct: number) => (pct > 0 ? 'up' : pct < 0 ? 'down' : 'neutral');
+  const trendLabelFor = (pct: number) => `${pct > 0 ? '+' : ''}${pct}%`;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1 mb-8">
         <h1 className="text-2xl font-black text-slate-800 tracking-tight">Institution Overview</h1>
         <p className="text-slate-500 font-medium">Real-time KPIs and system health monitoring</p>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
-        <StatCard label="Students" value={data.students} icon={<Users size={20} />} color="sky" trend="up" trendLabel="+12%" />
-        <StatCard label="Professors" value={data.professors} icon={<GraduationCap size={20} />} color="emerald" trend="up" trendLabel="+5%" />
-        <StatCard label="Courses" value={data.courses} icon={<BookOpen size={20} />} color="violet" />
-        <StatCard label="Active Users" value={data.activeUsers} icon={<Activity size={20} />} color="amber" />
-        <StatCard label="System Load" value={`${data.systemLoad}%`} icon={<Target size={20} />} color="rose" />
-        <StatCard label="Attendance" value={`${data.attendanceRate || 0}%`} icon={<Clock size={20} />} color="sky" />
-        <StatCard label="Revenue" value={`$${(data.revenue || 0).toLocaleString()}`} icon={<Award size={20} />} color="emerald" trend="up" trendLabel="+18%" />
-        <StatCard label="Pending Courses" value={data.pendingCourses} icon={<AlertTriangle size={20} />} color="amber" trend="down" trendLabel="-2" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+        <StatCard
+          label="Active Users"
+          value={data.activeUsers}
+          icon={<Activity size={20} />}
+          color="sky"
+          trend={trendFor(growth.activeUsers)}
+          trendLabel={trendLabelFor(growth.activeUsers ?? 0)}
+        />
+        <StatCard
+          label="Admin Users"
+          value={data.adminUsers}
+          icon={<ShieldCheck size={20} />}
+          color="violet"
+          trend={trendFor(growth.adminUsers)}
+          trendLabel={trendLabelFor(growth.adminUsers ?? 0)}
+        />
+        <StatCard
+          label="Professors"
+          value={data.professors}
+          icon={<GraduationCap size={20} />}
+          color="emerald"
+          trend={trendFor(growth.professors)}
+          trendLabel={trendLabelFor(growth.professors ?? 0)}
+        />
+        <StatCard
+          label="Students"
+          value={data.students}
+          icon={<Users size={20} />}
+          color="amber"
+          trend={trendFor(growth.students)}
+          trendLabel={trendLabelFor(growth.students ?? 0)}
+        />
+        <StatCard
+          label="Courses Live"
+          value={data.coursesLive}
+          icon={<BookOpen size={20} />}
+          color="slate"
+          trend={trendFor(growth.coursesLive)}
+          trendLabel={trendLabelFor(growth.coursesLive ?? 0)}
+        />
+        <StatCard
+          label="Revenue"
+          value={`$${(data.revenue || 0).toLocaleString()}`}
+          icon={<DollarSign size={20} />}
+          color="emerald"
+          trend={trendFor(growth.revenue)}
+          trendLabel={trendLabelFor(growth.revenue ?? 0)}
+        />
       </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5 mt-6">
+        <StatCard label="Completion Rate" value={`${data.completionRate ?? 0}%`} icon={<Target size={20} />} color="emerald" />
+        <StatCard label="Success Rate" value={`${data.successRate ?? 0}%`} icon={<Award size={20} />} color="amber" />
+        <StatCard label="Engagement" value={`${data.engagementScore ?? 0}/100`} icon={<TrendingUp size={20} />} color="violet" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-6">
+        <ChartCard title="New User Growth (6 Months)">
+          <div className="py-2">
+            <BarChart data={(data.growthByMonth || []).map((g: any) => ({ label: g.label, value: g.users }))} color="#4f46e5" />
+          </div>
+        </ChartCard>
+        <ChartCard title="New Enrollments (6 Months)">
+          <div className="py-2">
+            <BarChart data={(data.growthByMonth || []).map((g: any) => ({ label: g.label, value: g.enrollments }))} color="#0ea5e9" />
+          </div>
+        </ChartCard>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-6">
         <ChartCard title="Courses by Status">
           <div className="py-4">

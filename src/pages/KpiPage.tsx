@@ -85,7 +85,7 @@ export default function KpiPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">KPI Monitoring</h1>
+          <h1 className="text-xl font-bold text-slate-800">{role === 'admin' ? 'KPI Management' : 'KPI Monitor'}</h1>
           <p className="text-sm text-slate-500">{role === 'admin' ? 'Configure and monitor KPIs across the institution' : 'Your performance against targets'}</p>
         </div>
         <div className="flex gap-2">
